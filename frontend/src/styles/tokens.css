@@ -1,0 +1,107 @@
+/*
+ * Design tokens — the ONLY place colours, radii and fonts are defined (PRD §9.2).
+ * Change a value here and the whole app follows.
+ *
+ * Meaning-colours:
+ *   --ai     blue    → everything about the AI voice bot (always shown on the LEFT)
+ *   --human  orange  → everything about human agents     (always shown on the RIGHT)
+ *   --positive / --negative / --warning → deltas, ✓/✗, warnings (always paired with an icon or label)
+ *   --intent-* → intent bucket pills
+ *
+ * The shadcn/ui variables (--background, --card, …) are mapped onto our tokens at the bottom,
+ * so shadcn components pick up the same palette automatically.
+ */
+
+:root {
+  /* Surfaces & text */
+  --bg: #f7f7f8;
+  --surface: #ffffff;
+  --surface-sunken: #f1f2f4;
+  --border: #e6e7eb;
+  --text: #111318;
+  --text-muted: #6b7280;
+
+  /* Meaning */
+  --ai: #2f6fde;
+  --ai-soft: #e8f0fd;
+  --human: #e8692c;
+  --human-soft: #fdeee6;
+  --positive: #16a34a;
+  --positive-soft: #e7f6ec;
+  --negative: #dc2626;
+  --negative-soft: #fdecec;
+  --warning: #d97706;
+  --warning-soft: #fdf3e2;
+
+  /* Intent buckets */
+  --intent-high: #16a34a;
+  --intent-moderate: #0d9488;
+  --intent-neutral: #64748b;
+  --intent-low: #dc2626;
+
+  /* Shape */
+  --radius-card: 12px;
+  --radius-input: 8px;
+  --shadow-popover: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 16px rgb(0 0 0 / 0.06);
+}
+
+.dark {
+  --bg: #0e1014;
+  --surface: #16181d;
+  --surface-sunken: #1c1f25;
+  --border: #272a31;
+  --text: #edeef0;
+  --text-muted: #9ba1ab;
+
+  --ai: #5b8ef0;
+  --ai-soft: #1a2640;
+  --human: #f08a52;
+  --human-soft: #3a2418;
+  --positive: #34c46a;
+  --positive-soft: #14301f;
+  --negative: #f06060;
+  --negative-soft: #3a1717;
+  --warning: #f0a33a;
+  --warning-soft: #3a2a12;
+
+  --intent-high: #34c46a;
+  --intent-moderate: #2dbfb0;
+  --intent-neutral: #94a3b8;
+  --intent-low: #f06060;
+}
+
+/* ---- shadcn/ui variable mapping (don't edit; edit the tokens above) ---- */
+:root,
+.dark {
+  --background: var(--bg);
+  --foreground: var(--text);
+  --card: var(--surface);
+  --card-foreground: var(--text);
+  --popover: var(--surface);
+  --popover-foreground: var(--text);
+  --primary: var(--text);
+  --primary-foreground: var(--surface);
+  --secondary: var(--surface-sunken);
+  --secondary-foreground: var(--text);
+  --muted: var(--surface-sunken);
+  --muted-foreground: var(--text-muted);
+  --accent: var(--surface-sunken);
+  --accent-foreground: var(--text);
+  --destructive: var(--negative);
+  --input: var(--border);
+  --ring: var(--ai);
+  --radius: 0.625rem;
+  --sidebar: var(--surface);
+  --sidebar-foreground: var(--text);
+  --sidebar-primary: var(--text);
+  --sidebar-primary-foreground: var(--surface);
+  --sidebar-accent: var(--surface-sunken);
+  --sidebar-accent-foreground: var(--text);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ai);
+  --chart-1: var(--ai);
+  --chart-2: var(--human);
+  --chart-3: var(--positive);
+  --chart-4: var(--warning);
+  --chart-5: var(--negative);
+}

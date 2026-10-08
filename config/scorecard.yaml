@@ -1,0 +1,43 @@
+# Call quality scorecard — every call is scored 1 (poor) to 5 (excellent) on each dimension.
+#
+# You can edit this file freely:
+#   - change a label or guide         → takes effect on the next analysis
+#   - add / remove a dimension        → new calls use it; re-analyse old calls to update them
+#   - `key` must be lowercase_with_underscores and unique
+# After editing: Settings → "Reload config" (or restart the app).
+
+dimensions:
+  - key: greeting_intro
+    label: Greeting and intro
+    guide: "5 = warm, names the brand and the purpose in the first 10 seconds; 1 = no intro or confusing"
+  - key: understanding_customer
+    label: Understanding the customer
+    guide: "5 = asks about need, size, pain points and budget before pitching; 1 = pitches without asking"
+  - key: relevance
+    label: Relevance of answers
+    guide: "5 = answers the exact question asked; 1 = ignores the question or replies with a scripted line"
+  - key: empathy_tone
+    label: Empathy and tone
+    guide: "5 = acknowledges feelings and concerns, polite and patient; 1 = dismissive or pushy"
+  - key: clarity
+    label: Clarity
+    guide: "5 = short, clear sentences, prices and offers stated precisely; 1 = confusing or contradictory"
+  - key: objection_handling
+    label: Objection handling
+    guide: "5 = addresses the real concern with facts or options; 1 = ignores or argues"
+  - key: interruptions
+    label: Handling interruptions
+    guide: "5 = stops and listens when the customer cuts in; 1 = talks over the customer"
+  - key: naturalness
+    label: Naturalness
+    guide: "5 = sounds like a natural conversation; 1 = robotic, repetitive, scripted"
+  - key: resolution
+    label: Resolution
+    guide: "5 = the customer's questions are fully answered; 1 = customer left with open questions"
+  - key: closing
+    label: Closing
+    guide: "5 = ends with a concrete, time-bound next step; 1 = no next step"
+
+# How the overall Quality Score % is computed from the dimension scores:
+#   (mean score - 1) / 4 * 100
+quality_score: mean_of_dimensions_as_percent

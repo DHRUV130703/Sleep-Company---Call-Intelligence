@@ -1,0 +1,53 @@
+# Buying-intent rubric and the lists the AI is allowed to choose from.
+# After editing: Settings → "Reload config" (or restart the app).
+
+# Intent score (0–100) → bucket. Ranges must cover 0..100 exactly once, with no overlaps.
+buckets:
+  high: [75, 100]
+  moderate: [50, 74]
+  neutral: [30, 49]
+  low: [0, 29]
+
+# Buckets that are not decided by the score.
+special:
+  not_qualified: "Wrong number, not a buyer, job seeker, or otherwise not a lead"
+  not_available: "Call not connected, too short, silent, or voicemail"
+
+# Guidance given to the AI when it scores intent.
+signals:
+  positive:
+    - Asked about a specific model or size
+    - Asked the price or about an offer
+    - Asked about EMI, delivery or installation
+    - Agreed to a store visit or a callback
+    - Stated a purchase timeline
+  negative:
+    - Explicit refusal
+    - Says they already bought a mattress
+    - Says they have no need
+    - Repeatedly says they are busy
+    - Price is far above their stated budget
+
+# Objection types the AI must choose from (shown as tags on the Lead page).
+objection_types:
+  - price
+  - lack_of_interest
+  - timing
+  - competitor
+  - trust_brand
+  - product_fit
+  - delivery_installation
+  - need_to_consult
+  - other
+
+# Failure patterns the AI looks for in AI voice-bot calls (AI vs Human tab).
+ai_failure_patterns:
+  - scripted_repeat
+  - ignores_refusal
+  - misunderstood_intent
+  - wrong_language
+  - talks_over_customer
+  - no_answer_to_question
+  - dead_air
+  - unnatural_voice
+  - hallucinated_info

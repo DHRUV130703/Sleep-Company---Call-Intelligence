@@ -1,0 +1,35 @@
+# What we sell — the AI may only suggest pitching products from this list (Action insights tab).
+#
+# Edit freely: add, remove or rename products, and describe when each one fits.
+# Keep `name` short and exactly how your team says it. Prices are optional — leave them out unless
+# they are current, because the AI will repeat them to the customer.
+# After editing: Settings → "Reload config", then "Re-analyse" a call to see new suggestions.
+
+products:
+  - name: SmartGRID Ortho mattress
+    category: Mattress
+    pitch_when: "Back or joint pain, needs firm support, older customers, doctor advised an orthopaedic mattress"
+  - name: SmartGRID Luxe / Elite mattress
+    category: Mattress
+    pitch_when: "Wants premium comfort, hot sleeper (cooling), upgrading from a basic mattress, couples"
+  - name: SmartGRID pillow
+    category: Pillow
+    pitch_when: "Neck pain, buying a mattress (add-on), poor sleep, gifting"
+  - name: Recliner / sofa
+    category: Furniture
+    pitch_when: "Asked about sofa or recliner, setting up a living room, elderly parents, relaxation"
+  - name: Ergonomic office chair
+    category: Chair
+    pitch_when: "Works from home, back pain while sitting, asked about chair or desk"
+  - name: Bed / bed frame
+    category: Furniture
+    pitch_when: "Moving house, buying a mattress without a matching bed, asked about beds or storage"
+  - name: Mattress protector / topper
+    category: Accessory
+    pitch_when: "Just bought a mattress, has kids or pets, wants to make an old mattress softer"
+  - name: Store visit / free trial
+    category: Experience
+    pitch_when: "Interested but unsure, wants to feel the product, comparing options — book a visit or trial"
+  - name: EMI / offer
+    category: Financing
+    pitch_when: "Price objection, budget concern, asked about discounts or payment options"

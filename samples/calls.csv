@@ -1,0 +1,6 @@
+call_id,recording_url,agent_type,customer_name,phone,agent,campaign
+human_call_nithin,http://127.0.0.1:8765/human_call_nithin.mp3,Human,Nithin,9037125616,Kerala HiLITE Mall Store,Mattress enquiry follow-up
+human_call_priya,http://127.0.0.1:8765/human_call_priya.mp3,Human,Priya,9811122233,Kerala HiLITE Mall Store,Mattress enquiry follow-up
+ai_call_1,http://127.0.0.1:8765/ai_call_1.mp3,AI bot,,9822233344,Voice Bot v1,Mattress enquiry follow-up
+ai_call_2,http://127.0.0.1:8765/ai_call_2.mp3,AI bot,,9833344455,Voice Bot v1,Mattress enquiry follow-up
+ai_call_short,http://127.0.0.1:8765/ai_call_short.mp3,AI bot,,,Voice Bot v1,Mattress enquiry follow-up
