@@ -114,7 +114,7 @@ def _raise_for(res: httpx.Response) -> None:
     msg = str(err.get("message") or res.text[:200])
     if res.status_code in (401, 403):
         raise ProviderError(f"Groq rejected the API key: {msg}", no_credits=True)
-    if res.status_code == 429:
+    if res.status_code in (413, 429):  # Groq uses both for "request too large for your plan"
         if (
             "request too large" in msg.lower()
         ):  # a single call is over the plan's per-minute cap: waiting won't help

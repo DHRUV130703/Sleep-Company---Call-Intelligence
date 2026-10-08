@@ -80,8 +80,9 @@ async def _no_sleep(_seconds: float) -> None:
     return None
 
 
-async def test_request_too_large_for_plan_is_not_retried():
-    transport, sent = fake_groq([httpx.Response(429, json={"error": {"message": (
+@pytest.mark.parametrize("status", [413, 429])
+async def test_request_too_large_for_plan_is_not_retried(status):
+    transport, sent = fake_groq([httpx.Response(status, json={"error": {"message": (
         "Request too large for model `qwen/qwen3.8-27b` on output tokens per minute (OTPM): Limit 1000, Requested 3085")}})])  # fmt: skip
     with pytest.raises(ProviderError, match="too large for your Groq plan") as e:
         await GroqClient("test-key", rpm=1000, transport=transport).json(
