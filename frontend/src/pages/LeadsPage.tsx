@@ -102,7 +102,7 @@ export default function LeadsPage() {
     <>
       <PageHeader
         title="All Conversations"
-        description="One row per lead (phone number). Several recordings of the same number are stacked under that lead."
+        description="One row per lead. Calls from the same number are grouped together."
       />
       <FilterBar />
       <KpiHeader

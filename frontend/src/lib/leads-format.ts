@@ -45,3 +45,24 @@ export function downloadText(filename: string, text: string, type = 'text/csv;ch
   a.click()
   URL.revokeObjectURL(url)
 }
+
+/** Quick date ranges for filters: `from` is days before today (0 = today). */
+export const DATE_PRESETS = [
+  { label: 'Today', from: 0 },
+  { label: 'Last 7 days', from: -6 },
+  { label: 'Last 30 days', from: -29 },
+  { label: 'Last 90 days', from: -89 },
+]
+
+function shortDay(iso: string): string {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+}
+
+/** What the date button says: a preset name, a custom range, or "Any date". */
+export function dateLabel(from: string, to: string): string {
+  if (!from && !to) return 'Any date'
+  const preset = DATE_PRESETS.find((p) => from === isoDay(p.from) && to === isoDay(0))
+  if (preset) return preset.label
+  if (from && to) return from === to ? shortDay(from) : `${shortDay(from)} – ${shortDay(to)}`
+  return from ? `From ${shortDay(from)}` : `Until ${shortDay(to)}`
+}
