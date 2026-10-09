@@ -42,6 +42,7 @@ claude auth login
 | `make format` | Auto-format backend code |
 | `make migrate` | Apply database changes |
 | `make migration name="…"` | Create a database change after editing `backend/app/models.py` |
+| `make export-sqlite` | Export report data (calls, scores, transcripts, AI vs Human plan) to `exports/limezip-reports-<date>.db` — open with `sqlite3` or DB Browser for SQLite |
 | `make move-to-cloud` | One time: copy the local `data/` folder (database + files) into the cloud database in `DATABASE_URL` |
 
 ## How it fits together

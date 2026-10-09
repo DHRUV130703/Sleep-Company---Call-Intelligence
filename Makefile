@@ -4,12 +4,13 @@
 #   make test       backend + frontend tests
 #   make lint       code checks (ruff, mypy, oxlint, tsc)
 #   make move-to-cloud   one time: copy local data/ into the cloud database in DATABASE_URL
+#   make export-sqlite   report data → exports/limezip-reports-<date>.db (open with sqlite3)
 
 SHELL := /bin/bash
 BACKEND := backend
 VENV := $(BACKEND)/.venv/bin
 
-.PHONY: setup migrate migration move-to-cloud dev api worker web test lint format
+.PHONY: setup migrate migration move-to-cloud export-sqlite dev api worker web test lint format
 
 setup:
 	@command -v uv >/dev/null || { echo "✗ uv is required: https://docs.astral.sh/uv/  (macOS: brew install uv)"; exit 1; }
@@ -27,6 +28,10 @@ migrate:
 # One time, after setting DATABASE_URL in .env: copy the local database and files to the cloud database.
 move-to-cloud: migrate
 	cd $(BACKEND) && .venv/bin/python -m app.move_to_cloud
+
+# Report data (calls, scores, transcripts, AI vs Human plan) → exports/limezip-reports-<date>.db for sqlite3.
+export-sqlite:
+	cd $(BACKEND) && .venv/bin/python -m app.export_sqlite
 
 # After changing backend/app/models.py:  make migration name="add notes pinned flag"
 migration:

@@ -1,6 +1,7 @@
 # Secrets & local data
 .env
 data/
+exports/
 
 # Python
 backend/.venv/
