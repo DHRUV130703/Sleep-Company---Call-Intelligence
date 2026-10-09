@@ -3,3 +3,4 @@
 export const APP_NAME = 'LimeZip'
 export const WORKSPACE_NAME = 'Sleep Company'
 export const WORKSPACE_SUBTITLE = 'Call Intelligence'
+export const PRODUCT_AUTHOR = 'Dhruv Gohil'

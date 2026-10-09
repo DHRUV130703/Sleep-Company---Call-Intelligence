@@ -1,4 +1,3 @@
-import { useQuery } from '@tanstack/react-query'
 import {
   AudioLines,
   GitCompareArrows,
@@ -10,9 +9,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { NavLink } from 'react-router'
-import { api } from '@/lib/api'
-import { WORKSPACE_NAME, WORKSPACE_SUBTITLE } from '@/lib/constants'
-import { formatDateTime, formatHoursMins } from '@/lib/format'
+import { PRODUCT_AUTHOR, WORKSPACE_NAME, WORKSPACE_SUBTITLE } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 
 interface NavItem {
@@ -73,21 +70,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 function SidebarFooter() {
-  const stats = useQuery({ queryKey: ['stats'], queryFn: api.stats, refetchInterval: 30_000 })
-  const last = stats.data?.last_processed_at
-
   return (
-    <div className="mt-auto border-t px-5 py-4 text-[13px] leading-6">
-      <div className="text-muted-foreground">
-        Last processed:{' '}
-        <span className="font-medium text-ai">{last ? formatDateTime(last) : '—'}</span>
-      </div>
-      <div className="text-muted-foreground">
-        Audio processed:{' '}
-        <span className="num font-medium text-ai">
-          {stats.data ? formatHoursMins(stats.data.audio_seconds) : '—'}
-        </span>
-      </div>
+    <div className="mt-auto border-t px-5 py-4 text-[13px] text-muted-foreground">
+      Product by <span className="font-medium text-foreground">{PRODUCT_AUTHOR}</span>
     </div>
   )
 }
