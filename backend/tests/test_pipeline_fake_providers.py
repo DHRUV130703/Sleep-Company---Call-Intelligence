@@ -124,6 +124,28 @@ async def test_full_flow(session, fake_ai, tmp_path):
     assert cmp["sample_warning"]
     assert client.get("/api/compare/export.csv").text.startswith("call_id,label,agent_type")
 
+    # Shareable report: Word file and print-ready page contain every section.
+    import io as _io
+
+    from docx import Document
+
+    docx_res = client.get("/api/compare/export.docx")
+    assert docx_res.status_code == 200 and docx_res.headers["content-disposition"].endswith('.docx"')
+    text = "\n".join(p.text for p in Document(_io.BytesIO(docx_res.content)).paragraphs)
+    for heading in (
+        "Records",
+        "Verdict",
+        "Where they differ",
+        "Review scores",
+        "Measured from the transcripts",
+        "Outcomes and customer mood",
+        "What to fix in the bot",
+        "Every call",
+    ):
+        assert heading in text, heading
+    page = client.get("/api/compare/report.html?print=1").text
+    assert "Save as PDF" in page and "window.print()" in page and "Every call" in page
+
     # Swap speakers → metrics recomputed and analysis re-queued.
     client.post(f"/api/calls/{by_label['human']['id']}/swap-speakers")
     await _run_worker_until_idle()

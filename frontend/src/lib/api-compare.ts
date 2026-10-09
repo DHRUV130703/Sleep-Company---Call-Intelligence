@@ -53,5 +53,10 @@ export const compareApi = {
   result: (scope: CompareScope, force = false) => request<CompareResult>(`/compare${scopeQuery(scope, force)}`),
   options: () => request<CompareOptions>('/compare/options'),
   /** Plain download links (used in <a href download>). */
-  exportUrl: (scope: CompareScope, kind: 'csv' | 'json') => `/api/compare/export.${kind}${scopeQuery(scope)}`,
+  exportUrl: (scope: CompareScope, kind: 'csv' | 'json' | 'docx') => `/api/compare/export.${kind}${scopeQuery(scope)}`,
+  /** Print-ready report page; opens the browser's "Save as PDF" dialog. */
+  reportUrl: (scope: CompareScope) => {
+    const qs = scopeQuery(scope)
+    return `/api/compare/report.html${qs ? `${qs}&` : '?'}print=1`
+  },
 }

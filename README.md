@@ -119,4 +119,5 @@ Choices made during the build where the PRD left room. Each one is easy to revis
 - **One lead per phone number**; several recordings of the same number are stacked under that lead.
 - **Tables use server-side paging** (25–50 rows) instead of virtualisation — simpler, and fast enough.
 - **Not built yet:** Docker compose, labelled eval set (`make eval`), PDF export, app passcode, stereo channel-based speaker split.
+- **Shareable AI vs Human report (Word + PDF):** both are rendered from one outline (`backend/app/pipeline/report.py`), so they always match. Word uses `python-docx` (new dependency, added at the user's request). The PDF is the browser's "Save as PDF" of a print-ready page, because server-side PDF libraries render Hindi (Devanagari) incorrectly without extra font files.
 - **The API port is fixed at 8000** (Makefile + Vite proxy) to avoid a setting that would need changing in three places.

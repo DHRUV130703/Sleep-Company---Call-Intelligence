@@ -5,14 +5,17 @@ import io
 import json
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
-from fastapi.responses import Response
+from fastapi import APIRouter, Depends, Query
+from fastapi.responses import HTMLResponse, Response
 from sqlalchemy import func
 from sqlmodel import Session, col, select
 
 from app.db import get_session
 from app.models import Batch, Call
 from app.pipeline.compare import build_comparison, cached_comparison, export_rows, parse_scope
+from app.pipeline.report import build_outline
+from app.pipeline.report_docx import render_docx
+from app.pipeline.report_html import render_html
 
 router = APIRouter(tags=["compare"])
 
@@ -78,6 +81,32 @@ async def export_csv(scope: dict = Depends(_scope), session: Session = Depends(g
         media_type="text/csv",
         headers={"Content-Disposition": 'attachment; filename="ai-vs-human-scores.csv"'},
     )
+
+
+@router.get("/compare/export.docx")
+async def export_docx(scope: dict = Depends(_scope), session: Session = Depends(get_session)) -> Response:
+    """The full report as a Word document, to share with teams."""
+    result = await _result(session, scope, False)
+    return Response(
+        render_docx(build_outline(result)),
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{_report_name(result)}.docx"'},
+    )
+
+
+@router.get("/compare/report.html", response_class=HTMLResponse)
+async def report_html(
+    scope: dict = Depends(_scope),
+    auto_print: bool = Query(False, alias="print"),
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    """The full report as a print-ready page. With ?print=1 the browser's "Save as PDF" dialog opens."""
+    result = await _result(session, scope, False)
+    return HTMLResponse(render_html(build_outline(result), auto_print=auto_print))
+
+
+def _report_name(result: dict) -> str:
+    return "ai-vs-human-report-" + str(result.get("generated_at", ""))[:10]
 
 
 @router.get("/compare/export.json")

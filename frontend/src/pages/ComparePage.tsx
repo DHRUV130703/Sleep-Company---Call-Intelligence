@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Download, FileJson, GitCompareArrows, Info, RefreshCw } from 'lucide-react'
+import { GitCompareArrows, Info, RefreshCw } from 'lucide-react'
 import { useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { AgentChip } from '@/components/AgentChip'
 import { DifferencesTable } from '@/components/compare/DifferencesTable'
 import { DivergingBars } from '@/components/compare/DivergingBars'
+import { DownloadMenu } from '@/components/compare/DownloadMenu'
 import { EveryCall } from '@/components/compare/EveryCall'
 import { FixTheBot } from '@/components/compare/FixTheBot'
 import { MeasuredTable } from '@/components/compare/MeasuredTable'
@@ -76,22 +77,7 @@ export default function ComparePage() {
               <RefreshCw className={cn('size-4', rerun.isPending && 'animate-spin motion-reduce:animate-none')} aria-hidden />
               Re-run comparison
             </Button>
-            {hasCalls && (
-              <>
-                <Button variant="outline" asChild>
-                  <a href={compareApi.exportUrl(scope, 'json')} download>
-                    <FileJson className="size-4" aria-hidden />
-                    Save results (JSON)
-                  </a>
-                </Button>
-                <Button variant="outline" asChild>
-                  <a href={compareApi.exportUrl(scope, 'csv')} download>
-                    <Download className="size-4" aria-hidden />
-                    Export scores (CSV)
-                  </a>
-                </Button>
-              </>
-            )}
+            {hasCalls && <DownloadMenu scope={scope} />}
           </div>
         }
       />
