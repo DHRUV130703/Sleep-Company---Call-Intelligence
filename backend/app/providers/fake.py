@@ -135,6 +135,7 @@ class FakeLLM:
                     "reason": "Demo score",
                     "evidence": first_a[2],
                     "t": first_a[0],
+                    "better": "Answer the price first, then ask about size." if is_ai else "",
                 }
                 for d in b.scorecard.dimensions
             ],
@@ -166,6 +167,7 @@ class FakeLLM:
                     "description": "Repeated the opening",
                     "quote": first_a[2],
                     "t": first_a[0],
+                    "better_line": "Ji, Ortho Pro ka offer price 24,999 hai.",
                 }
             ]
             if is_ai
@@ -175,8 +177,10 @@ class FakeLLM:
     def _comparison(self, prompt: str) -> dict[str, Any]:
         quotes = re.findall(r"call_id=(\d+) .*?quote: \"(.+?)\"", prompt)
         ev = [{"call_id": int(cid), "quote": q} for cid, q in quotes[:2]]
+        ai_ids = [int(i) for i in re.findall(r"^call_id=(\d+) side=ai", prompt, re.M)]
         return {
             "verdict_headline": "Humans answer what the customer asked; the bot repeats scripted lines.",
+            "verdict_detail": "The bot is not ready to replace humans: it repeats its opening instead of answering.",
             "differences": [
                 {
                     "theme": "Answering the question",
@@ -192,8 +196,11 @@ class FakeLLM:
             "recommended_changes": [
                 {
                     "priority": "high",
+                    "area": "Knowledge base",
                     "change": "Answer price questions directly",
                     "rationale": "Price is the most common first question",
+                    "bot_line": "Ji, Ortho Pro ka offer price 24,999 hai.",
+                    "call_ids": ai_ids[:2] + [999999],  # 999999 is not a call: must be dropped
                 }
             ],
         }

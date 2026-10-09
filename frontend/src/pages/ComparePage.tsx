@@ -3,14 +3,19 @@ import { GitCompareArrows, Info, RefreshCw } from 'lucide-react'
 import { useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { AgentChip } from '@/components/AgentChip'
+import { CallRcaList } from '@/components/compare/CallRcaList'
 import { DifferencesTable } from '@/components/compare/DifferencesTable'
 import { DivergingBars } from '@/components/compare/DivergingBars'
 import { DownloadMenu } from '@/components/compare/DownloadMenu'
 import { EveryCall } from '@/components/compare/EveryCall'
 import { FixTheBot } from '@/components/compare/FixTheBot'
+import { ImprovementPlan } from '@/components/compare/ImprovementPlan'
 import { MeasuredTable } from '@/components/compare/MeasuredTable'
+import { MissedObjections } from '@/components/compare/MissedObjections'
 import { OutcomesCard } from '@/components/compare/OutcomesCard'
+import { OutdatedReviewsNotice } from '@/components/compare/OutdatedReviewsNotice'
 import { RecordsStrip } from '@/components/compare/RecordsStrip'
+import { RootCauses } from '@/components/compare/RootCauses'
 import { ScopePicker } from '@/components/compare/ScopePicker'
 import { VerdictCard } from '@/components/compare/VerdictCard'
 import { EmptyState } from '@/components/EmptyState'
@@ -22,15 +27,19 @@ import { formatDateTime } from '@/lib/format'
 import type { CompareResult, CompareScope } from '@/lib/types-compare'
 import { cn } from '@/lib/utils'
 
-/** Sections A–H in report order (PRD §6.6). Ids match each section's anchor. */
+/** Report sections in page order: verdict and the bot improvement plan first, then the detail. Ids match each section's anchor. */
 const SECTIONS = [
   { id: 'records', label: 'Records' },
   { id: 'verdict', label: 'Verdict' },
+  { id: 'plan', label: 'Improvement plan' },
+  { id: 'root-causes', label: 'Root causes' },
+  { id: 'objections', label: 'Missed objections' },
+  { id: 'fix', label: 'Recommended changes' },
+  { id: 'call-rca', label: 'Call-by-call RCA' },
   { id: 'differences', label: 'Where they differ' },
   { id: 'scores', label: 'Review scores' },
   { id: 'measured', label: 'Measured' },
   { id: 'outcomes', label: 'Outcomes and mood' },
-  { id: 'fix', label: 'What to fix' },
   { id: 'calls', label: 'Every call' },
 ]
 
@@ -64,8 +73,8 @@ export default function ComparePage() {
         title="AI voice bot vs human agents"
         description={
           data
-            ? `Where the bot and your team differ, with evidence from every call. Built ${formatDateTime(data.generated_at)}.`
-            : 'Where the bot and your team differ, with evidence from every call.'
+            ? `How good the bot is against your team, what to fix first, and the calls that prove it. Built ${formatDateTime(data.generated_at)}.`
+            : 'How good the bot is against your team, what to fix first, and the calls that prove it.'
         }
         actions={
           <div className="flex flex-wrap gap-2">
@@ -101,23 +110,28 @@ export default function ComparePage() {
         </div>
       )}
       {data && !hasCalls && <NothingToCompare filtered={params.toString() !== ''} onClear={() => setParams({})} />}
-      {data && hasCalls && <Report data={data} />}
+      {data && hasCalls && <Report data={data} scope={scope} />}
     </>
   )
 }
 
-function Report({ data }: { data: CompareResult }) {
+function Report({ data, scope }: { data: CompareResult; scope: CompareScope }) {
   return (
     <div className="xl:grid xl:grid-cols-[minmax(0,1fr)_11rem] xl:gap-8">
       <div className="min-w-0 space-y-6">
         <OneSideNotice data={data} />
+        <OutdatedReviewsNotice data={data} scope={scope} />
         <RecordsStrip data={data} />
         <VerdictCard data={data} />
+        <ImprovementPlan data={data} />
+        <RootCauses data={data} />
+        <MissedObjections data={data} />
+        <FixTheBot data={data} />
+        <CallRcaList data={data} />
         <DifferencesTable data={data} />
         <DivergingBars data={data} />
         <MeasuredTable data={data} />
         <OutcomesCard data={data} />
-        <FixTheBot data={data} />
         <EveryCall data={data} />
       </div>
       <nav aria-label="Sections of this report" className="hidden xl:block">

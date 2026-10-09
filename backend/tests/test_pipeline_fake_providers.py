@@ -121,6 +121,22 @@ async def test_full_flow(session, fake_ai, tmp_path):
     assert cmp["records"]["ai"]["uploaded"] == 2 and cmp["records"]["ai"]["not_connected"] == 1
     assert cmp["scores"]["human"]["avg_review"] == 4.0 and cmp["scores"]["ai"]["avg_review"] == 2.0
     assert cmp["synthesis"]["verdict_headline"]
+    imp = cmp["improvement"]
+    assert imp["verdict"]["status"] == "behind" and imp["verdict"]["readiness_pct"] == 50  # 2.0 vs 4.0
+    assert imp["parameters"][0]["priority"] == "high" and imp["parameters"][0]["gap"] == 2.0
+    assert imp["parameters"][0]["bot_examples"][0]["better"]  # each weak moment says what to do instead
+    cause = imp["root_causes"][0]
+    assert cause["pattern"] == "scripted_repeat" and cause["area"] == "Conversation flow" and cause["fix"]
+    assert cause["calls"][0]["lead_id"] and cause["calls"][0]["better"]  # drillable to call + lead
+    rca = imp["call_rca"][0]
+    assert rca["issue_count"] == len(rca["issues"]) > 0
+    assert imp["objections"][0]["type"] == "price" and imp["objections"][0]["human_example"]
+    assert cmp["outdated_bot_reviews"] == 0  # reviewed with today's prompt
+    assert client.post("/api/compare/update-bot-reviews").json() == {"queued": 0}
+    change = cmp["synthesis"]["recommended_changes"][0]
+    assert change["examples"] and all(
+        e["call_id"] != 999999 for e in change["examples"]
+    )  # unknown ids dropped
     assert cmp["sample_warning"]
     assert client.get("/api/compare/export.csv").text.startswith("call_id,label,agent_type")
 
@@ -139,7 +155,11 @@ async def test_full_flow(session, fake_ai, tmp_path):
         "Review scores",
         "Measured from the transcripts",
         "Outcomes and customer mood",
-        "What to fix in the bot",
+        "Improvement plan for the bot",
+        "Root causes — repeated bot failures",
+        "Objections the bot missed",
+        "Recommended changes to the bot",
+        "Call-by-call RCA (bot calls)",
         "Every call",
     ):
         assert heading in text, heading

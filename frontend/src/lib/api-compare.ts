@@ -52,6 +52,9 @@ export const compareApi = {
   /** The full report. `force` rebuilds it even if a cached result exists. */
   result: (scope: CompareScope, force = false) => request<CompareResult>(`/compare${scopeQuery(scope, force)}`),
   options: () => request<CompareOptions>('/compare/options'),
+  /** Re-analyse bot calls reviewed with an older prompt (they lack "better" lines). */
+  updateBotReviews: (scope: CompareScope) =>
+    request<{ queued: number }>(`/compare/update-bot-reviews${scopeQuery(scope)}`, { method: 'POST' }),
   /** Plain download links (used in <a href download>). */
   exportUrl: (scope: CompareScope, kind: 'csv' | 'json' | 'docx') => `/api/compare/export.${kind}${scopeQuery(scope)}`,
   /** Print-ready report page; opens the browser's "Save as PDF" dialog. */

@@ -7,7 +7,7 @@ Opened with ?print=1 the page shows the print dialog straight away.
 
 from html import escape
 
-from app.pipeline.report import Bullets, Para, Quote, Report, Sub, Table
+from app.pipeline.report_blocks import Bullets, Para, Quote, Report, Sub, Table
 
 CSS = """
 @page { size: A4; margin: 16mm 14mm; }
@@ -26,6 +26,7 @@ tr { break-inside: avoid; }
 th.ai { color: #2f6fde; } th.human { color: #e8692c; }
 blockquote { margin: 6px 0; padding: 6px 10px; border-left: 3px solid #c9ccd3; background: #f7f7f8; break-inside: avoid; }
 blockquote .src { display: block; color: #6b7280; font-size: 11px; margin-top: 2px; }
+blockquote .src a { color: inherit; }
 .bar { position: sticky; top: 0; background: #fff; padding: 8px 0 12px; display: flex; gap: 8px; align-items: center; }
 .bar button { font: inherit; padding: 6px 12px; border: 1px solid #c9ccd3; border-radius: 8px; background: #111318;
               color: #fff; cursor: pointer; }
@@ -41,7 +42,10 @@ def _block(b: object) -> str:
     if isinstance(b, Bullets):
         return "<ul>" + "".join(f"<li>{escape(i)}</li>" for i in b.items) + "</ul>"
     if isinstance(b, Quote):
-        return f'<blockquote>“{escape(b.text)}”<span class="src">{escape(b.source)}</span></blockquote>'
+        src = escape(b.source)
+        if b.href:
+            src = f'<a href="{escape(b.href)}">{src}</a>'
+        return f'<blockquote>“{escape(b.text)}”<span class="src">{src}</span></blockquote>'
     if isinstance(b, Table):
 
         def th(h: str) -> str:

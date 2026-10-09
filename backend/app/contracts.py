@@ -131,6 +131,10 @@ class ScoreItem(BaseModel):
     reason: str = ""
     evidence: str = ""
     t: float = -1
+    better: str = Field(
+        default="",
+        description='Score 1-3: what the agent should have said or done instead (one line); else ""',
+    )
 
 
 class KeyMoment(BaseModel):
@@ -169,6 +173,10 @@ class FailurePattern(BaseModel):
     description: str = ""
     quote: str = ""
     t: float = -1
+    better_line: str = Field(
+        default="",
+        description="What the bot should have said instead — one natural line in the customer's language",
+    )
 
 
 class CallAnalysis(BaseModel):
@@ -214,12 +222,18 @@ class Difference(BaseModel):
 
 class Change(BaseModel):
     priority: Literal["high", "medium", "low"]
+    area: str = Field(default="", description="Which part of the bot changes, e.g. Script, Knowledge base")
     change: str
     rationale: str
+    bot_line: str = Field(
+        default="", description="The new line or behaviour for the bot, in the customer's language"
+    )
+    call_ids: list[int] = Field(default_factory=list, description="1-3 AI call_ids that show the problem")
 
 
 class ComparisonSynthesis(BaseModel):
     verdict_headline: str
+    verdict_detail: str = Field(default="", description="2-3 sentences: is the bot ready, what holds it back")
     differences: list[Difference]
     ai_better: list[str]
     human_better: list[str]

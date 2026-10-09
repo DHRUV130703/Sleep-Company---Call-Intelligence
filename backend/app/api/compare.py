@@ -10,9 +10,16 @@ from fastapi.responses import HTMLResponse, Response
 from sqlalchemy import func
 from sqlmodel import Session, col, select
 
+from app.api.batches import requeue_call
 from app.db import get_session
-from app.models import Batch, Call
-from app.pipeline.compare import build_comparison, cached_comparison, export_rows, parse_scope
+from app.models import Batch, Call, CallStage
+from app.pipeline.compare import (
+    build_comparison,
+    cached_comparison,
+    export_rows,
+    outdated_bot_calls,
+    parse_scope,
+)
 from app.pipeline.report import build_outline
 from app.pipeline.report_docx import render_docx
 from app.pipeline.report_html import render_html
@@ -41,6 +48,16 @@ async def compare(
     scope: dict = Depends(_scope), force: bool = False, session: Session = Depends(get_session)
 ) -> dict:
     return await _result(session, scope, force)
+
+
+@router.post("/compare/update-bot-reviews")
+def update_bot_reviews(scope: dict = Depends(_scope), session: Session = Depends(get_session)) -> dict:
+    """Re-analyse bot calls reviewed with an older prompt, so they get the newest fields (e.g. "better" lines)."""
+    calls = outdated_bot_calls(session, scope)
+    for c in calls:
+        requeue_call(session, c, CallStage.analysing)
+    session.commit()
+    return {"queued": len(calls)}
 
 
 @router.get("/compare/options")

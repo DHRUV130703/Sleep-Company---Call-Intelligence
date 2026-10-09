@@ -24,3 +24,9 @@ def render(name: str, **values: object) -> tuple[str, str]:
         return str(values[key])
 
     return _PLACEHOLDER.sub(fill, body.strip()), f"{name}@{version}"
+
+
+def current_version(name: str) -> str:
+    """The version stored with results made by prompts/<name>.md today, e.g. "analyze_call@3"."""
+    first = (DIR / f"{name}.md").read_text(encoding="utf-8").partition("\n")[0]
+    return f"{name}@{first.removeprefix('version:').strip() if first.startswith('version:') else '0'}"

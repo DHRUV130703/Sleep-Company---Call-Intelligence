@@ -52,18 +52,134 @@ export interface SideSignals {
   avg_intent: number | null
 }
 
-export interface PatternEvidence {
+// ---------------------------------------------------------------------------
+// Bot improvement plan (backend/app/pipeline/bot_improvement.py + bot_rca.py)
+// ---------------------------------------------------------------------------
+
+/** Points every example back to its call (and the moment in it) and its lead. */
+export interface CallRef {
   call_id: number
   label: string
+  lead_id: number | null
+}
+
+export type ImprovementPriority = 'high' | 'medium' | 'low' | 'none'
+export type GapStatus = 'behind' | 'on_par' | 'ahead' | 'no_data'
+
+export interface Verdict {
+  status: 'behind' | 'on_par' | 'ahead' | 'no_benchmark' | 'no_data'
+  label: string
+  /** Human average minus bot average (1–5 scale). Positive = bot behind. */
+  gap: number | null
+  /** Bot average as % of the human average. */
+  readiness_pct: number | null
+  dimensions_behind: number
+  dimensions_on_par: number
+  dimensions_ahead: number
+  /** % of calls ending with a sale, store visit, callback or other agreed step. */
+  positive_outcome_pct: PerSide<number | null>
+  top_levers: string[]
+  points: string[]
+}
+
+export interface BotMoment extends CallRef {
+  score: number
+  reason: string
+  /** Verified quote, or "" when the quote couldn't be verified. */
+  quote: string
+  t: number
+  better: string
+}
+
+export interface HumanMoment extends CallRef {
+  score: number
+  reason: string
   quote: string
   t: number
 }
 
-export interface FailurePattern {
+export interface ImprovementParameter {
+  key: string
+  label: string
+  area: string
+  fix: string
+  ai: number | null
+  human: number | null
+  target: number
+  gap: number | null
+  weak_calls: number
+  of: number
+  weak_share: number
+  priority: ImprovementPriority
+  status: GapStatus
+  bot_examples: BotMoment[]
+  human_examples: HumanMoment[]
+}
+
+export interface RootCauseHit extends CallRef {
+  description: string
+  quote: string
+  t: number
+  better: string
+}
+
+export interface RootCause {
   pattern: string
+  label: string
+  area: string
+  fix: string
   count: number
   of: number
-  evidence: PatternEvidence[]
+  share: number
+  /** From the share of bot calls affected, using the playbook's weak_share thresholds. */
+  priority: ImprovementPriority
+  calls: RootCauseHit[]
+}
+
+export interface MissedObjection extends CallRef {
+  title: string
+  quote: string
+  t: number
+  handling: string
+  better: string
+}
+
+export interface ObjectionGap {
+  type: string
+  label: string
+  total: number
+  handled_well: number
+  missed: MissedObjection[]
+  human_example: (CallRef & { quote: string; t: number; handling: string }) | null
+}
+
+export interface CallIssue {
+  kind: 'failure' | 'objection' | 'weak_score' | 'unanswered'
+  title: string
+  detail: string
+  quote: string
+  /** Seconds into the call; -1 when unknown. */
+  t: number
+  better: string
+}
+
+export interface CallRca extends CallRef {
+  duration_s: number | null
+  review_score: number | null
+  outcome: string | null
+  mood_end: string | null
+  one_liner: string
+  main_issue: string
+  issue_count: number
+  issues: CallIssue[]
+}
+
+export interface Improvement {
+  verdict: Verdict
+  parameters: ImprovementParameter[]
+  root_causes: RootCause[]
+  objections: ObjectionGap[]
+  call_rca: CallRca[]
 }
 
 export interface CompareCall {
@@ -99,12 +215,18 @@ export type Priority = 'high' | 'medium' | 'low'
 
 export interface RecommendedChange {
   priority: Priority
+  area: string
   change: string
   rationale: string
+  /** The new line or behaviour for the bot ("" when not a line). */
+  bot_line: string
+  /** Bot calls that show the problem (ids checked by the backend). */
+  examples: CallRef[]
 }
 
 export interface Synthesis {
   verdict_headline: string
+  verdict_detail: string
   differences: Difference[]
   ai_better: string[]
   human_better: string[]
@@ -121,6 +243,8 @@ export interface CompareResult {
     comparable_only: boolean
   }
   generated_at: string
+  /** Bot calls reviewed with an older analysis prompt (missing "better" lines). */
+  outdated_bot_reviews: number
   records: PerSide<RecordCounts>
   sample_warning: string | null
   scores: PerSide<SideScore>
@@ -128,7 +252,7 @@ export interface CompareResult {
   metrics: PairRow[]
   outcomes: PairRow[]
   signals: PerSide<SideSignals>
-  failure_patterns: FailurePattern[]
+  improvement: Improvement
   calls: PerSide<CompareCall[]>
   /** The written part. Null when the AI couldn't write it (see synthesis_error). */
   synthesis: Synthesis | null

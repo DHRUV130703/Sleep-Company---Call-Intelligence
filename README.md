@@ -60,6 +60,7 @@ Browser (React, :5173) ──/api──▶ API (FastAPI, :8000) ──▶ SQLite
 |---|---|---|
 | Change scorecard areas or their descriptions | `config/scorecard.yaml` | Settings → **Reload config** |
 | Change intent score ranges, objection types, bot failure patterns | `config/intent_rubric.yaml` | Settings → **Reload config** |
+| Change how bot fixes are ranked, who owns each fix, and the suggested fix | `config/bot_playbook.yaml` | Settings → **Reload config**, then **Re-run comparison** |
 | Switch AI provider or model, change concurrency, limits, privacy | `.env` | restart `make dev` |
 | Change colours or fonts | `frontend/src/styles/tokens.css` | saved = live |
 | Change the workspace name in the sidebar | `frontend/src/lib/constants.ts` | saved = live |
@@ -119,5 +120,6 @@ Choices made during the build where the PRD left room. Each one is easy to revis
 - **One lead per phone number**; several recordings of the same number are stacked under that lead.
 - **Tables use server-side paging** (25–50 rows) instead of virtualisation — simpler, and fast enough.
 - **Not built yet:** Docker compose, labelled eval set (`make eval`), PDF export, app passcode, stereo channel-based speaker split.
+- **Bot improvement plan (AI vs Human):** the verdict, ranked improvement parameters, root causes, missed objections and call-by-call RCA are computed in code (`pipeline/bot_improvement.py`, `pipeline/bot_rca.py`), so they are complete even when the AI-written summary hits a rate limit. Priority = gap to the human average OR how often the bot is weak (score 1–2), thresholds in `config/bot_playbook.yaml`. The verdict is "behind" if quality is > 0.3 below humans **or** the bot ends ≥ 10 points fewer calls with a concrete next step. Each weak moment carries a "better" line written during the per-call analysis (prompt v3); calls reviewed with an older prompt can be refreshed with **Update bot reviews** on the page. The AI summary prompt is capped (~5,000 characters of call digests, worst bot calls and best human calls first) to fit Groq's free tier.
 - **Shareable AI vs Human report (Word + PDF):** both are rendered from one outline (`backend/app/pipeline/report.py`), so they always match. Word uses `python-docx` (new dependency, added at the user's request). The PDF is the browser's "Save as PDF" of a print-ready page, because server-side PDF libraries render Hindi (Devanagari) incorrectly without extra font files.
 - **The API port is fixed at 8000** (Makefile + Vite proxy) to avoid a setting that would need changing in three places.

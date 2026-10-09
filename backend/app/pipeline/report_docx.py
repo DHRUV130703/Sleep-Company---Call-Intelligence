@@ -11,7 +11,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt, RGBColor
 
-from app.pipeline.report import Bullets, Para, Quote, Report, Sub, Table
+from app.pipeline.report_blocks import Bullets, Para, Quote, Report, Sub, Table
 
 MUTED = RGBColor(0x6B, 0x72, 0x80)
 AI_BLUE = RGBColor(0x2F, 0x6F, 0xDE)

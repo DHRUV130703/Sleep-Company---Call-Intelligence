@@ -5,91 +5,40 @@
 Word (report_docx.py) and the print/PDF page (report_html.py) both render this same outline, so the
 two formats always contain the same content. To change what the report says, change it here.
 
-Block types:  Para(text, muted)  ·  Bullets(items)  ·  Table(headers, rows)  ·  Quote(text, source)  ·  Sub(text)
+The bot improvement sections (verdict, improvement plan, root causes, objections, call-by-call RCA)
+live in report_improvement.py; block types live in report_blocks.py.
 """
 
 import contextlib
-from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
 from app.pipeline.compare import OUTCOME_LABELS
+from app.pipeline.report_blocks import (
+    SIDES,
+    Block,
+    Bullets,
+    Para,
+    Quote,
+    Report,
+    Section,
+    Sub,
+    Table,
+    call_href,
+    clock,
+    hours_mins,
+    humanize,
+    num,
+)
+from app.pipeline.report_improvement import (
+    call_rca_section,
+    improvement_section,
+    objections_section,
+    root_causes_section,
+    verdict_section,
+)
 
-SIDES = (("ai", "AI voice bot"), ("human", "Human agents"))
-
-
-@dataclass
-class Para:
-    text: str
-    muted: bool = False
-
-
-@dataclass
-class Sub:
-    """A small heading inside a section."""
-
-    text: str
-
-
-@dataclass
-class Bullets:
-    items: list[str]
-
-
-@dataclass
-class Table:
-    headers: list[str]
-    rows: list[list[str]]
-
-
-@dataclass
-class Quote:
-    text: str
-    source: str  # e.g. "Human agents · +91-9284201609 · 0:42"
-
-
-Block = Para | Sub | Bullets | Table | Quote
-
-
-@dataclass
-class Section:
-    heading: str
-    blocks: list[Block] = field(default_factory=list)
-
-
-@dataclass
-class Report:
-    title: str
-    meta: list[str]
-    sections: list[Section]
-
-
-# ---------------------------------------------------------------------------
-# Formatting helpers
-# ---------------------------------------------------------------------------
-
-
-def clock(seconds: float | None) -> str:
-    if seconds is None or seconds < 0:
-        return "—"
-    s = int(round(seconds))
-    return f"{s // 3600}:{s % 3600 // 60:02d}:{s % 60:02d}" if s >= 3600 else f"{s // 60}:{s % 60:02d}"
-
-
-def hours_mins(seconds: float) -> str:
-    m = int(seconds // 60)
-    return f"{m // 60} h {m % 60} min" if m >= 60 else f"{m} min"
-
-
-def num(v: float | None, suffix: str = "") -> str:
-    if v is None:
-        return "—"
-    return f"{v:g}{suffix}" if isinstance(v, int) or float(v).is_integer() else f"{v:.1f}{suffix}"
-
-
-def humanize(key: str) -> str:
-    s = key.replace("_", " ")
-    return s[:1].upper() + s[1:]
+__all__ = ["Bullets", "Para", "Quote", "Report", "Section", "Sub", "Table", "build_outline"]
 
 
 def _scope_text(scope: dict[str, Any]) -> str:
@@ -130,27 +79,6 @@ def _records(r: dict[str, Any]) -> Section:
     return Section("Records", blocks)
 
 
-def _verdict(r: dict[str, Any]) -> Section:
-    syn = r.get("synthesis") or {}
-    blocks: list[Block] = []
-    if syn.get("verdict_headline"):
-        blocks.append(Para(syn["verdict_headline"]))
-    elif r.get("synthesis_error"):
-        blocks.append(Para(r["synthesis_error"], muted=True))
-    rows = []
-    for side, label in SIDES:
-        sc = r["scores"][side]
-        rows.append(
-            [
-                label,
-                f"{num(sc['avg_review'])} / 5" if sc["avg_review"] is not None else "—",
-                f"{sc['n']} of {sc['of']} calls reviewed",
-            ]
-        )
-    blocks.append(Table(["", "Average review score", "Based on"], rows))
-    return Section("Verdict", blocks)
-
-
 def _differences(r: dict[str, Any]) -> Section | None:
     diffs = (r.get("synthesis") or {}).get("differences") or []
     if not diffs:
@@ -166,7 +94,13 @@ def _differences(r: dict[str, Any]) -> Section | None:
         ]
         for ev in d.get("evidence", []):
             side = "AI voice bot" if ev.get("agent_type") == "ai" else "Human agents"
-            blocks.append(Quote(ev["quote"], f"{side} · {ev.get('label', '')} · {clock(ev.get('t'))}"))
+            blocks.append(
+                Quote(
+                    ev["quote"],
+                    f"{side} · {ev.get('label', '')} · {clock(ev.get('t'))}",
+                    call_href(ev["call_id"], ev.get("t")),
+                )
+            )
     return Section("Where they differ", blocks)
 
 
@@ -230,36 +164,30 @@ def _outcomes(r: dict[str, Any]) -> Section:
 
 
 def _fix(r: dict[str, Any]) -> Section:
+    """The AI-written recommendations: strengths per side, outcomes, and concrete changes to the bot."""
     syn = r.get("synthesis") or {}
     blocks: list[Block] = []
+    changes = sorted(
+        syn.get("recommended_changes") or [], key=lambda c: ["high", "medium", "low"].index(c["priority"])
+    )
+    if changes:
+        rows = []
+        for c in changes:
+            examples = ", ".join(e["label"] for e in c.get("examples", []))
+            rows.append(
+                [c["priority"].title(), c.get("area") or "—", c["change"], c["rationale"],
+                 f"“{c['bot_line']}”" if c.get("bot_line") else "—", examples or "—"]
+            )  # fmt: skip
+        blocks.append(Table(["Priority", "Area", "Change", "Why", "New bot line", "Example calls"], rows))
     if syn.get("ai_better"):
         blocks += [Sub("Where the AI does better"), Bullets(syn["ai_better"])]
     if syn.get("human_better"):
         blocks += [Sub("Where humans do better"), Bullets(syn["human_better"])]
     if syn.get("outcomes_paragraph"):
         blocks += [Sub("Outcomes"), Para(syn["outcomes_paragraph"])]
-    if r.get("failure_patterns"):
-        blocks.append(Sub("Repeated AI failure patterns"))
-        for p in r["failure_patterns"]:
-            blocks.append(Para(f"{humanize(p['pattern'])} — {p['count']} of {p['of']} AI calls"))
-            for ev in p.get("evidence", []):
-                blocks.append(
-                    Quote(ev["quote"], f"AI voice bot · {ev.get('label', '')} · {clock(ev.get('t'))}")
-                )
-    changes = sorted(
-        syn.get("recommended_changes") or [], key=lambda c: ["high", "medium", "low"].index(c["priority"])
-    )
-    if changes:
-        blocks += [
-            Sub("Recommended changes"),
-            Table(
-                ["Priority", "Change", "Why"],
-                [[c["priority"].title(), c["change"], c["rationale"]] for c in changes],
-            ),
-        ]
     if not blocks:
         blocks.append(Para(r.get("synthesis_error") or "No recommendations yet.", muted=True))
-    return Section("What to fix in the bot", blocks)
+    return Section("Recommended changes to the bot", blocks)
 
 
 def _every_call(r: dict[str, Any]) -> Section:
@@ -284,8 +212,20 @@ def build_outline(result: dict[str, Any]) -> Report:
     built = result.get("generated_at") or ""
     with contextlib.suppress(ValueError):  # keep the raw text if it isn't a date
         built = datetime.fromisoformat(built).strftime("%d %b %Y, %H:%M UTC")
-    sections = [_records(result), _verdict(result), _differences(result), _scores(result), _measured(result),
-                _outcomes(result), _fix(result), _every_call(result)]  # fmt: skip
+    sections = [
+        _records(result),
+        verdict_section(result),
+        improvement_section(result),
+        root_causes_section(result),
+        objections_section(result),
+        _fix(result),
+        call_rca_section(result),
+        _differences(result),
+        _scores(result),
+        _measured(result),
+        _outcomes(result),
+        _every_call(result),
+    ]
     return Report(
         title="AI voice bot vs human agents",
         meta=[f"Report built {built}", _scope_text(result.get("scope") or {})],

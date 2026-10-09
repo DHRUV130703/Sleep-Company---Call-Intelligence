@@ -168,10 +168,39 @@ class ProductCatalog(BaseModel):
     products: list[Product] = []
 
 
+class PlaybookEntry(BaseModel):
+    label: str = ""
+    area: str = ""
+    fix: str = ""
+
+
+class PriorityRule(BaseModel):
+    gap: float
+    weak_share: float
+
+
+class PriorityRules(BaseModel):
+    high: PriorityRule = PriorityRule(gap=1.0, weak_share=60)
+    medium: PriorityRule = PriorityRule(gap=0.5, weak_share=30)
+
+
+class BotPlaybook(BaseModel):
+    """How the AI vs Human page ranks what to fix in the bot (config/bot_playbook.yaml)."""
+
+    priority: PriorityRules = PriorityRules()
+    weak_score: int = 2
+    on_par_margin: float = 0.3
+    outcome_margin: float = 10
+    target_score: float = 4.0
+    dimensions: dict[str, PlaybookEntry] = {}
+    failure_patterns: dict[str, PlaybookEntry] = {}
+
+
 class BusinessConfig(BaseModel):
     scorecard: Scorecard
     intent: IntentRubric
     catalog: ProductCatalog = ProductCatalog()
+    playbook: BotPlaybook = BotPlaybook()
 
 
 def load_business_config(config_dir: Path = CONFIG_DIR) -> BusinessConfig:
@@ -188,6 +217,7 @@ def load_business_config(config_dir: Path = CONFIG_DIR) -> BusinessConfig:
         scorecard=Scorecard.model_validate(read("scorecard.yaml")),
         intent=IntentRubric.model_validate(read("intent_rubric.yaml")),
         catalog=ProductCatalog.model_validate(read("products.yaml", required=False)),
+        playbook=BotPlaybook.model_validate(read("bot_playbook.yaml", required=False)),
     )
 
 

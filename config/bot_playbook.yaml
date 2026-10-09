@@ -1,0 +1,87 @@
+# Bot improvement playbook — how the AI vs Human page turns call reviews into a plan for the AI voice bot.
+#
+# Edit freely. After editing: Settings → "Reload config", then "Re-run comparison" on the AI vs Human page.
+#
+# "Gap" = human average − bot average on the 1–5 scorecard (how far the bot is behind your team).
+# "Weak call" = a bot call that scored `weak_score` or lower on that dimension.
+
+priority:
+  high: { gap: 1.0, weak_share: 60 }    # fix first: ≥ 1 point behind humans OR weak in ≥ 60% of bot calls
+  medium: { gap: 0.5, weak_share: 30 }  # fix next:  ≥ 0.5 points behind OR weak in ≥ 30% of bot calls
+weak_score: 2         # a bot call scoring this or lower on a dimension counts as weak
+on_par_margin: 0.3    # within ±0.3 points of humans counts as "on par"
+outcome_margin: 10    # the bot is also "behind" if its share of calls ending with a concrete next step
+                      # (sale, store visit, callback, other agreed step) is this many points below humans'
+target_score: 4       # the target when there are no human calls to compare against
+
+# Every scorecard dimension (keys from scorecard.yaml): which part of the bot owns it, and the usual fix.
+dimensions:
+  greeting_intro:
+    area: Script
+    fix: "Open with name + The Sleep Company + the reason for the call in one short sentence, then ask a question."
+  understanding_customer:
+    area: Sales logic
+    fix: "Add discovery steps before any pitch: who it is for, size, current mattress, pain (back / heat), budget."
+  relevance:
+    area: Speech understanding
+    fix: "Detect the customer's question (price, size, delivery, offer) and answer it first; drop the scripted line."
+  empathy_tone:
+    area: Script
+    fix: "Acknowledge before answering (\"Samajh sakti hoon…\"). Cap apologies at one per call."
+  clarity:
+    area: Script
+    fix: "Keep each bot turn under ~20 words. State prices and offers as one exact number, never a range."
+  objection_handling:
+    area: Sales logic
+    fix: "Give each objection type its own branch: price → EMI / offer, trust → 100-night trial, timing → callback slot."
+  interruptions:
+    area: Voice & latency
+    fix: "Turn on barge-in: stop speaking within 300 ms when the customer talks, then respond to what they said."
+  naturalness:
+    area: Voice & latency
+    fix: "Vary fillers and confirmations, shorten pauses, never read the same line twice in one call."
+  resolution:
+    area: Knowledge base
+    fix: "Add the missing answers (prices, sizes, delivery areas, warranty) to the bot's knowledge base; hand off when unsure."
+  closing:
+    area: Sales logic
+    fix: "Always end with a time-bound next step: store visit slot, callback time, or a WhatsApp link — confirm it back."
+
+# Every AI failure pattern (keys from intent_rubric.yaml → ai_failure_patterns).
+failure_patterns:
+  scripted_repeat:
+    label: Repeats the same scripted line
+    area: Conversation flow
+    fix: "Track what was already said; after one repeat, rephrase or move to the next step instead of looping."
+  ignores_refusal:
+    label: Keeps pitching after a clear "no"
+    area: Conversation flow
+    fix: "Detect refusals (\"nahi chahiye\", \"not interested\", \"busy\"); offer one callback option, then end politely."
+  misunderstood_intent:
+    label: Misunderstands what the customer wants
+    area: Speech understanding
+    fix: "Add the missed phrases as training examples; confirm the intent back (\"Aap … ke baare mein pooch rahe hain?\")."
+  wrong_language:
+    label: Answers in the wrong language
+    area: Language handling
+    fix: "Switch to the customer's language after their first reply and stay in it; allow Hinglish mixing."
+  talks_over_customer:
+    label: Talks over the customer
+    area: Voice & latency
+    fix: "Enable barge-in and lower the end-of-speech timeout so the bot stops when the customer starts speaking."
+  no_answer_to_question:
+    label: Does not answer the question
+    area: Knowledge base
+    fix: "Add the unanswered questions below to the knowledge base; if no answer exists, offer a human callback."
+  dead_air:
+    label: Long silences
+    area: Voice & latency
+    fix: "Cut response latency; play a short filler (\"Ek second…\") when a lookup takes longer than ~1.5 s."
+  unnatural_voice:
+    label: Robotic or unnatural voice
+    area: Voice & latency
+    fix: "Use a more natural Indian-English / Hindi voice, adjust speaking rate, and pronounce product names correctly."
+  hallucinated_info:
+    label: Gives wrong or made-up information
+    area: Knowledge base
+    fix: "Restrict answers to the approved knowledge base; block prices, offers and dates that are not in it."
