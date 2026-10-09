@@ -8,11 +8,11 @@ from fastapi import APIRouter, Depends, File, Header, Request, UploadFile
 from pydantic import BaseModel
 from sqlmodel import Session
 
-from app.config import get_settings
+from app import storage
 from app.db import get_session
 from app.errors import AppError, ErrorCode
 from app.ingest import chunks, sheet_reader
-from app.ingest.batches import sheet_path
+from app.ingest.batches import read_sheet
 from app.models import Upload
 from app.pipeline.leads import normalise_phone
 
@@ -99,11 +99,8 @@ async def preview_sheet(file: UploadFile = File(...)) -> dict:
     if len(data) > MAX_SHEET_BYTES:
         raise AppError(ErrorCode.FILE_TOO_LARGE, "Spreadsheets can be up to 20 MB.")
     sheet_id = uuid4().hex
-    folder = get_settings().data_dir / "sheets"
-    folder.mkdir(parents=True, exist_ok=True)
-    path = folder / f"{sheet_id}{ext}"
-    path.write_bytes(data)
-    headers, rows = sheet_reader.read_table(path)
+    storage.put_bytes(f"sheets/{sheet_id}{ext}", data)
+    headers, rows = read_sheet(sheet_id)
     return {
         "sheet_id": sheet_id,
         "filename": file.filename,
@@ -117,7 +114,7 @@ async def preview_sheet(file: UploadFile = File(...)) -> dict:
 
 @router.post("/sheets/{sheet_id}/check")
 def check_sheet(sheet_id: str, body: SheetCheckBody) -> dict:
-    _, rows = sheet_reader.read_table(sheet_path(sheet_id))
+    _, rows = read_sheet(sheet_id)
     result = sheet_reader.rows_to_specs(rows, body.mapping, body.agent_type_mode)
     by_type = {"ai": 0, "human": 0}
     phones: Counter[str] = Counter()

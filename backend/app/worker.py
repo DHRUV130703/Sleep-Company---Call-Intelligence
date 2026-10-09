@@ -5,7 +5,8 @@ How it works:
 - For every stage there are N "slots" (N = concurrency from .env). Each slot loops:
   claim one queued job atomically → run the stage handler → mark it done/failed.
 - Jobs stuck in `running` for > 10 minutes (e.g. the worker was killed) are put back in the queue.
-- Every few seconds the worker writes a heartbeat file; /api/health uses it to show "Worker: running".
+- Every few seconds the worker writes a heartbeat row (worker_heartbeats); /api/health uses it to
+  show "Worker: running".
 """
 
 import asyncio
@@ -14,16 +15,18 @@ import fcntl
 import logging
 import os
 import signal
-import time
+import tempfile
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from sqlalchemy import select, update
 from sqlmodel import Session, col
 
+from app import storage
 from app.config import get_settings
 from app.db import get_engine, utcnow
 from app.log import setup_logging
-from app.models import CallStage, Job, JobStatus
+from app.models import CallStage, Job, JobStatus, WorkerHeartbeat
 from app.pipeline.stages import STAGE_HANDLERS, process_job
 
 log = logging.getLogger("worker")
@@ -86,14 +89,26 @@ def finish_job(session: Session, job_id: int, error: str | None = None) -> None:
 # ---------------------------------------------------------------------------
 
 
-def heartbeat_path():  # type: ignore[no-untyped-def]
-    return get_settings().data_dir / "worker.heartbeat"
+def write_heartbeat() -> None:
+    with Session(get_engine()) as s:
+        beat = s.get(WorkerHeartbeat, "worker") or WorkerHeartbeat(name="worker")
+        beat.beat_at = utcnow()
+        s.add(beat)
+        s.commit()
+
+
+def last_heartbeat() -> datetime | None:
+    with Session(get_engine()) as s:
+        beat = s.get(WorkerHeartbeat, "worker")
+        return beat.beat_at if beat else None
 
 
 async def heartbeat_loop(stop: asyncio.Event) -> None:
-    path = heartbeat_path()
     while not stop.is_set():
-        path.write_text(utcnow().isoformat())
+        try:
+            await asyncio.to_thread(write_heartbeat)
+        except Exception:  # a dropped connection must not stop the worker
+            log.warning("heartbeat failed", exc_info=True)
         with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(stop.wait(), timeout=HEARTBEAT_EVERY_S)
 
@@ -137,16 +152,13 @@ async def retention_loop(stop: asyncio.Event) -> None:
 
 
 def purge_raw_audio(days: int) -> int:
-    cutoff = time.time() - days * 86400
+    """Delete original recordings and unfinished uploads older than `days` (normalised audio is kept)."""
+    cutoff = utcnow() - timedelta(days=days)
     removed = 0
-    for folder in ("audio/raw", "uploads"):
-        root = get_settings().data_dir / folder
-        if not root.exists():
-            continue
-        for path in root.rglob("*"):
-            if path.is_file() and path.stat().st_mtime < cutoff:
-                path.unlink(missing_ok=True)
-                removed += 1
+    for prefix in ("audio/raw/", "uploads/"):
+        for key in storage.keys(prefix, older_than=cutoff):
+            storage.delete_file(key)
+            removed += 1
     return removed
 
 
@@ -162,7 +174,6 @@ def concurrency_for(stage: CallStage) -> int:
 
 
 async def run_worker(stop: asyncio.Event) -> None:
-    get_settings().data_dir.mkdir(parents=True, exist_ok=True)
     with Session(get_engine()) as s:
         requeued = requeue_stale_jobs(s)
     cfg = get_settings()
@@ -187,9 +198,9 @@ async def run_worker(stop: asyncio.Event) -> None:
 
 
 def single_instance_lock():  # type: ignore[no-untyped-def]
-    """Only one worker may run. A second `make dev` would make two workers fight over the same calls."""
-    path = get_settings().data_dir / "worker.lock"
-    path.parent.mkdir(parents=True, exist_ok=True)
+    """Only one worker per machine. A second `make dev` would make two workers fight over the same calls.
+    The lock file lives in the system temp folder (it holds no data)."""
+    path = Path(tempfile.gettempdir()) / "limezip-worker.lock"
     handle = path.open("w")
     try:
         fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)

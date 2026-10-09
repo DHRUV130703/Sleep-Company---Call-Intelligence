@@ -1,6 +1,6 @@
 # LimeZip Call Intelligence
 
-Upload sales-call recordings (AI voice bot or human agents) and get transcripts, summaries, buying-intent insights, next actions, and an **AI vs Human** comparison. Everything runs on your machine.
+Upload sales-call recordings (AI voice bot or human agents) and get transcripts, summaries, buying-intent insights, next actions, and an **AI vs Human** comparison. The app runs on your machine; data and recordings are stored in a cloud database (CockroachDB).
 
 - What we're building and why: [PRD.md](PRD.md)
 - Rules for the coding agent: [CLAUDE.md](CLAUDE.md)
@@ -42,13 +42,22 @@ claude auth login
 | `make format` | Auto-format backend code |
 | `make migrate` | Apply database changes |
 | `make migration name="…"` | Create a database change after editing `backend/app/models.py` |
+| `make move-to-cloud` | One time: copy the local `data/` folder (database + files) into the cloud database in `DATABASE_URL` |
 
 ## How it fits together
 
 ```
-Browser (React, :5173) ──/api──▶ API (FastAPI, :8000) ──▶ SQLite (data/app.db) ◀── Worker (python -m app.worker)
-                                                         └─ audio files in data/audio/
+Browser (React, :5173) ──/api──▶ API (FastAPI, :8000) ──▶ Cloud database (CockroachDB) ◀── Worker (python -m app.worker)
+                                                          tables + every file: recordings,
+                                                          uploads, spreadsheets, raw transcripts
 ```
+
+- **Storage:** with `DATABASE_URL` set in `.env`, everything lives in the cloud database — nothing is kept on
+  this computer. Files are stored in the `blobs` / `blob_parts` tables in 1 MB parts (`backend/app/storage.py`);
+  ffmpeg and the speech-to-text APIs get a temporary copy that is deleted straight after. Without
+  `DATABASE_URL` the same code uses a local SQLite file in `data/`.
+- **Moving a local install to the cloud (one time):** set `DATABASE_URL`, then `make move-to-cloud`. It copies
+  every row and file from `data/` and leaves `data/` untouched as a backup.
 
 - **API** (`backend/app/main.py`, routes in `backend/app/api/`) answers the web app.
 - **Worker** (`backend/app/worker.py`) does the slow work: download → prepare audio → transcribe → analyse. It takes jobs from the `jobs` table, so nothing is lost if it stops. It picks up where it left off.
@@ -73,7 +82,8 @@ config/                 business rules (YAML) — safe to edit
 backend/app/
   main.py               FastAPI app
   config.py             reads .env and config/*.yaml
-  db.py, models.py      database + tables
+  db.py, models.py      database + tables (CockroachDB in the cloud, or local SQLite)
+  storage.py            files (recordings, uploads, sheets) stored in the database
   errors.py             error codes + the messages users see
   worker.py             background job loop
   api/                  HTTP endpoints, one file per area
@@ -87,7 +97,7 @@ frontend/src/
   components/           shared UI (layout/, ui/ = shadcn primitives)
   lib/                  api client, formatting, theme, types
   styles/tokens.css     design tokens (colours, radii)
-data/                   database + audio (git-ignored)
+data/                   local SQLite mode only (git-ignored); unused when DATABASE_URL is set
 ```
 
 ## Build progress
@@ -120,6 +130,7 @@ Choices made during the build where the PRD left room. Each one is easy to revis
 - **One lead per phone number**; several recordings of the same number are stacked under that lead.
 - **Tables use server-side paging** (25–50 rows) instead of virtualisation — simpler, and fast enough.
 - **Not built yet:** Docker compose, labelled eval set (`make eval`), PDF export, app passcode, stereo channel-based speaker split.
+- **Cloud database, no local disk:** the database is CockroachDB (Postgres-compatible, `DATABASE_URL`). Files are stored in the same database as 1 MB parts instead of a separate object store, at the user's request ("move all data to the db") — one service, one bill, nothing on the local disk. Trade-off: a few MB/s per file, fine for call recordings (~0.25 MB/min). New dependencies, needed to talk to CockroachDB: `sqlalchemy-cockroachdb` (its dialect), `psycopg[binary]` (driver), `certifi` (CA certificates to verify the server's TLS). Connections use READ COMMITTED isolation (the API and the worker write at the same time without retry errors) and sequential ids (CockroachDB's default random 64-bit ids are too large for JavaScript). Uploaded 8 MB chunks are joined by re-labelling their parts in SQL, without copying bytes. Worker heartbeat moved to the `worker_heartbeats` table; the single-worker lock file lives in the system temp folder.
 - **Bot improvement plan (AI vs Human):** the verdict, ranked improvement parameters, root causes, missed objections and call-by-call RCA are computed in code (`pipeline/bot_improvement.py`, `pipeline/bot_rca.py`), so they are complete even when the AI-written summary hits a rate limit. Priority = gap to the human average OR how often the bot is weak (score 1–2), thresholds in `config/bot_playbook.yaml`. The verdict is "behind" if quality is > 0.3 below humans **or** the bot ends ≥ 10 points fewer calls with a concrete next step. Each weak moment carries a "better" line written during the per-call analysis (prompt v3); calls reviewed with an older prompt can be refreshed with **Update bot reviews** on the page. The AI summary prompt is capped (~5,000 characters of call digests, worst bot calls and best human calls first) to fit Groq's free tier.
 - **Shareable AI vs Human report (Word + PDF):** both are rendered from one outline (`backend/app/pipeline/report.py`), so they always match. Word uses `python-docx` (new dependency, added at the user's request). The PDF is the browser's "Save as PDF" of a print-ready page, because server-side PDF libraries render Hindi (Devanagari) incorrectly without extra font files.
 - **The API port is fixed at 8000** (Makefile + Vite proxy) to avoid a setting that would need changing in three places.

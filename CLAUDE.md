@@ -37,7 +37,8 @@ make eval                   # (P1, not yet built) run labelled eval set and prin
 - Type hints everywhere. Pydantic models for every request, response and LLM contract (`schemas.py`).
 - Routers in `app/api/*.py` stay thin: validate → call a function in `ingest/` or `pipeline/` → return a schema.
 - Async I/O for HTTP and provider calls. CPU or subprocess work (ffmpeg) goes through `asyncio.to_thread` or `asyncio.create_subprocess_exec`.
-- SQLite: enable WAL and `busy_timeout=5000` in `db.py`. Use short transactions. The atomic job-claim SQL is in PRD §8.3.
+- Database: CockroachDB in the cloud (`DATABASE_URL`), or SQLite locally (WAL + `busy_timeout=5000`, set in `db.py`). Use short transactions. The atomic job-claim SQL is in PRD §8.3.
+- Files never go to the local disk: read and write them only through `app/storage.py` (stored in the database). Use `storage.local_copy()` when a tool needs a real file.
 - Retries: one helper `with_retries(fn, retry_on=..., max_attempts=4)` with exponential backoff and jitter. Reuse it everywhere.
 - Rate limiting: one simple async token bucket per provider in `providers/base.py`.
 - Time: store UTC and display in `DEFAULT_TIMEZONE` (Asia/Kolkata). Relative dates ("kal", "tomorrow") are resolved in `grounding.py`.

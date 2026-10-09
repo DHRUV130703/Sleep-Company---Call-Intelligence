@@ -1,6 +1,6 @@
 """Create a batch: turn uploaded files / ZIPs / spreadsheet rows / links into calls + leads + first jobs."""
 
-import shutil
+import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 
 from sqlmodel import Session
 
+from app import storage
 from app.config import get_settings
 from app.errors import AppError, ErrorCode
 from app.ingest import sheet_reader, zip_reader
@@ -41,12 +42,17 @@ class BatchInput:
     links: list[dict[str, Any]] = field(default_factory=list)  # {url, label?, agent_type?}
 
 
-def sheet_path(sheet_id: str) -> Path:
-    folder = get_settings().data_dir / "sheets"
-    matches = list(folder.glob(f"{sheet_id}.*"))
+def sheet_key(sheet_id: str) -> str:
+    """Storage key of an uploaded spreadsheet ("sheets/<id>.<ext>")."""
+    matches = storage.keys(f"sheets/{sheet_id}.")
     if not matches:
         raise AppError(ErrorCode.NOT_FOUND, "Spreadsheet not found. Upload it again.")
     return matches[0]
+
+
+def read_sheet(sheet_id: str) -> tuple[list[str], list[dict[str, str]]]:
+    with storage.local_copy(sheet_key(sheet_id)) as path:
+        return sheet_reader.read_table(path)
 
 
 def _parse_dt(raw: str) -> datetime | None:
@@ -97,7 +103,6 @@ def collect_specs(
     session: Session, inp: BatchInput
 ) -> tuple[list[CallSpec], list[dict[str, str]], SourceType]:
     s = get_settings()
-    raw_dir = s.data_dir / "audio" / "raw"
     specs: list[CallSpec] = []
     skipped: list[dict[str, str]] = []
     kinds: set[SourceType] = set()
@@ -107,53 +112,58 @@ def collect_specs(
         if upload.status != UploadStatus.complete or not upload.file_path:
             raise AppError(ErrorCode.UPLOAD_INCOMPLETE, f"'{upload.filename}' hasn't finished uploading.")
         agent = _agent(f.get("agent_type"), inp.agent_type_mode)  # may be None for a ZIP with a manifest
-        path = Path(upload.file_path)
-        if path.suffix.lower() == ".zip":
+        key = upload.file_path
+        ext = Path(key).suffix.lower()
+        if ext == ".zip":
             kinds.add(SourceType.zip)
-            result = zip_reader.extract_audio(path, raw_dir, s.max_calls_per_batch)
-            skipped += [
-                {"name": f"{upload.filename} › {x['name']}", "reason": x["reason"]} for x in result.skipped
-            ]
-            for e in result.entries:
-                m = e.meta
-                entry_agent = sheet_reader.normalise_agent_type(m.get("agent_type", "")) or agent
-                if not entry_agent:
-                    skipped.append(
-                        {
-                            "name": f"{upload.filename} › {e.name}",
-                            "reason": "No agent type: add it to manifest.csv or choose AI / Human",
-                        }
+            with storage.local_copy(key) as zip_file, tempfile.TemporaryDirectory(prefix="limezip-") as tmp:
+                result = zip_reader.extract_audio(zip_file, Path(tmp), s.max_calls_per_batch)
+                skipped += [
+                    {"name": f"{upload.filename} › {x['name']}", "reason": x["reason"]}
+                    for x in result.skipped
+                ]
+                for e in result.entries:
+                    m = e.meta
+                    entry_agent = sheet_reader.normalise_agent_type(m.get("agent_type", "")) or agent
+                    if not entry_agent:
+                        skipped.append(
+                            {
+                                "name": f"{upload.filename} › {e.name}",
+                                "reason": "No agent type: add it to manifest.csv or choose AI / Human",
+                            }
+                        )
+                        continue
+                    raw_key = f"audio/raw/{e.path.name}"
+                    storage.put_file(raw_key, e.path)
+                    specs.append(
+                        CallSpec(
+                            label=m.get("external_id") or m.get("lead_name") or Path(e.name).stem,
+                            agent_type=entry_agent,
+                            file_path=raw_key,
+                            upload_id=upload.id,
+                            lead_name=m.get("lead_name", ""),
+                            lead_phone=m.get("lead_phone", ""),
+                            call_datetime=m.get("call_datetime", ""),
+                            agent_name=m.get("agent_name", ""),
+                            campaign=m.get("campaign", ""),
+                            external_id=m.get("external_id", ""),
+                        )
                     )
-                    e.path.unlink(missing_ok=True)
-                    continue
-                specs.append(
-                    CallSpec(
-                        label=m.get("external_id") or m.get("lead_name") or Path(e.name).stem,
-                        agent_type=entry_agent,
-                        file_path=str(e.path),
-                        upload_id=upload.id,
-                        lead_name=m.get("lead_name", ""),
-                        lead_phone=m.get("lead_phone", ""),
-                        call_datetime=m.get("call_datetime", ""),
-                        agent_name=m.get("agent_name", ""),
-                        campaign=m.get("campaign", ""),
-                        external_id=m.get("external_id", ""),
-                    )
-                )
-            path.unlink(missing_ok=True)  # the ZIP itself is no longer needed
-        elif path.suffix.lower() in zip_reader.AUDIO_EXTS:
+            storage.delete_file(key)  # the ZIP itself is no longer needed
+        elif ext in zip_reader.AUDIO_EXTS:
             kinds.add(SourceType.files)
-            raw_dir.mkdir(parents=True, exist_ok=True)
-            dest = raw_dir / f"{upload.sha256}{path.suffix.lower()}"
-            if not dest.exists():
-                shutil.move(str(path), dest)
+            raw_key = f"audio/raw/{upload.sha256}{ext}"
+            if storage.exists(raw_key):
+                storage.delete_file(key)  # the same recording was uploaded before
+            else:
+                storage.rename(key, raw_key)
             specs.append(
                 CallSpec(
                     label=Path(upload.filename).stem,
                     agent_type=_require_agent(
                         f.get("agent_type"), inp.agent_type_mode, f"'{upload.filename}'"
                     ),
-                    file_path=str(dest),
+                    file_path=raw_key,
                     upload_id=upload.id,
                 )
             )
@@ -162,7 +172,7 @@ def collect_specs(
 
     if inp.sheet:
         kinds.add(SourceType.sheet)
-        headers, rows = sheet_reader.read_table(sheet_path(inp.sheet["sheet_id"]))
+        headers, rows = read_sheet(inp.sheet["sheet_id"])
         check = sheet_reader.rows_to_specs(rows, inp.sheet["mapping"], inp.agent_type_mode.value)
         specs += check.specs
         skipped += [{"name": f"Row {p['row']}", "reason": p["message"]} for p in check.problems]

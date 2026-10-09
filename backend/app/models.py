@@ -134,7 +134,7 @@ class Upload(SQLModel, table=True):
     mime: str = ""
     chunk_size: int  # received chunks are the .part files on disk (safe with parallel uploads)
     status: UploadStatus = UploadStatus.receiving
-    file_path: str | None = None
+    file_path: str | None = None  # storage key of the finished file (app/storage.py), not a disk path
     created_at: datetime = _created_at()
 
 
@@ -172,8 +172,8 @@ class Call(SQLModel, table=True):
     source_url: str | None = None
     upload_id: str | None = Field(default=None, foreign_key="uploads.id")
     audio_sha256: str | None = Field(default=None, index=True)
-    raw_path: str | None = None
-    audio_path: str | None = None
+    raw_path: str | None = None  # storage key of the original recording (app/storage.py)
+    audio_path: str | None = None  # storage key of the normalised MP3 the player streams
     duration_s: float | None = None
     channels: int | None = None
     call_datetime: datetime | None = Field(default=None, sa_type=UTCDateTime)
@@ -295,3 +295,7 @@ class TranscriptCache(SQLModel, table=True):
 
     audio_sha256: str = Field(primary_key=True)
     transcript_id: int = Field(foreign_key="transcripts.id")
+
+
+# File storage and worker heartbeat tables live in their own module; import them so they are registered.
+from app.models_storage import Blob, BlobPart, WorkerHeartbeat  # noqa: E402, F401

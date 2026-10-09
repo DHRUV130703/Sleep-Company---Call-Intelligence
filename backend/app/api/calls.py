@@ -1,13 +1,14 @@
 """Calls: list, detail (transcript + analysis + metrics), audio, retry, re-analyse, swap speakers."""
 
-from pathlib import Path
+import re
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, Header, Query
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import func, or_
 from sqlmodel import Session, col, select
 
+from app import storage
 from app.api.batches import requeue_call
 from app.api.views import call_row, lead_row
 from app.db import get_session
@@ -86,7 +87,7 @@ def call_detail(call_id: int, session: Session = Depends(get_session)) -> dict:
     return {
         **call_row(call, analysis, lead),
         "lead": lead_row(lead) if lead else None,
-        "has_audio": bool(call.audio_path and Path(call.audio_path).exists()),
+        "has_audio": storage.exists(call.audio_path),
         "transcript": {
             "provider": transcript.provider,
             "model": transcript.model,
@@ -111,17 +112,46 @@ def call_detail(call_id: int, session: Session = Depends(get_session)) -> dict:
 
 
 @router.get("/calls/{call_id}/audio")
-def call_audio(call_id: int, session: Session = Depends(get_session)) -> FileResponse:
-    """Normalised audio. FileResponse supports HTTP Range, so the player can seek."""
+def call_audio(
+    call_id: int,
+    range_header: str | None = Header(None, alias="range"),
+    session: Session = Depends(get_session),
+) -> Response:
+    """Normalised audio, streamed from the database. Supports HTTP Range so the player can seek."""
     call = _get_call(session, call_id)
-    if not call.audio_path or not Path(call.audio_path).exists():
+    blob = storage.info(call.audio_path)
+    if blob is None:
         raise AppError(ErrorCode.NOT_FOUND, "Audio isn't available for this call.")
-    return FileResponse(
-        call.audio_path,
-        media_type="audio/mpeg",
-        filename=f"call-{call_id}.mp3",
-        content_disposition_type="inline",
+    headers = {
+        "Accept-Ranges": "bytes",
+        "Content-Disposition": f'inline; filename="call-{call_id}.mp3"',
+        "Cache-Control": "private, max-age=3600",
+    }
+    span = parse_range(range_header, blob.size)
+    if span is None:
+        headers["Content-Length"] = str(blob.size)
+        return StreamingResponse(storage.iter_parts(blob.key), media_type="audio/mpeg", headers=headers)
+    start, end = span
+    headers["Content-Range"] = f"bytes {start}-{end}/{blob.size}"
+    headers["Content-Length"] = str(end - start + 1)
+    return StreamingResponse(
+        storage.iter_range(blob.key, start, end), status_code=206, media_type="audio/mpeg", headers=headers
     )
+
+
+def parse_range(value: str | None, size: int) -> tuple[int, int] | None:
+    """ "bytes=100-199" / "bytes=100-" / "bytes=-500" → (start, end) inclusive; None = whole file."""
+    m = re.fullmatch(r"\s*bytes=(\d*)-(\d*)\s*", value or "")
+    if not m or size == 0 or (not m.group(1) and not m.group(2)):
+        return None
+    if m.group(1):
+        start = int(m.group(1))
+        end = min(int(m.group(2)), size - 1) if m.group(2) else size - 1
+    else:  # suffix: the last N bytes
+        start, end = max(0, size - int(m.group(2))), size - 1
+    if start > end or start >= size:
+        raise AppError(ErrorCode.VALIDATION_ERROR, "Requested range is outside the audio.")
+    return start, end
 
 
 @router.post("/calls/{call_id}/retry")

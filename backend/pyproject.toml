@@ -19,6 +19,9 @@ dependencies = [
     "mlx-whisper>=0.4.3",
     "faster-whisper>=1.2.1",
     "python-docx>=1.2.0",
+    "sqlalchemy-cockroachdb>=2.0",
+    "psycopg[binary]>=3.2",
+    "certifi>=2026.7.22",
 ]
 
 [project.optional-dependencies]

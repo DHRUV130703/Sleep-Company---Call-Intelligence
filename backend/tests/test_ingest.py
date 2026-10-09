@@ -1,10 +1,10 @@
 import hashlib
 import zipfile
-from pathlib import Path
 
 import httpx
 import pytest
 
+from app import storage
 from app.errors import AppError
 from app.ingest import chunks, sheet_reader, zip_reader
 from app.ingest.downloader import direct_link, download
@@ -127,7 +127,7 @@ def test_chunked_upload_resume_and_assemble(session, monkeypatch):
     chunks.write_chunk(up, 1, data[10:20], None)
     done = chunks.complete(session, up)
     assert done.sha256 == hashlib.sha256(data).hexdigest()
-    assert Path(done.file_path).read_bytes() == data
+    assert storage.read_bytes(done.file_path) == data  # stored in the database, not on disk
 
 
 def test_upload_size_limits(session):

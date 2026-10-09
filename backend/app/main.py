@@ -17,7 +17,6 @@ from app.log import setup_logging
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     setup_logging()
-    get_settings().data_dir.mkdir(parents=True, exist_ok=True)
     yield
 
 

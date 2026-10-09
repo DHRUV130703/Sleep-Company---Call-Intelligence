@@ -5,12 +5,14 @@
 Each stage handler receives the call id, does its work, and returns the next stage (or None when the
 call is finished). Handlers are idempotent: if their output already exists they skip the work, so a
 crashed or restarted worker simply carries on.
+
+Recordings live in the database (app/storage.py); ffmpeg and the speech-to-text APIs work on a
+temporary local copy that is deleted when the stage ends.
 """
 
-import hashlib
+import asyncio
 import json
 import logging
-import shutil
 import tempfile
 import time
 from collections.abc import Awaitable, Callable
@@ -20,6 +22,7 @@ from typing import Any
 
 from sqlmodel import Session, col, select
 
+from app import storage
 from app.config import get_settings
 from app.db import get_engine, utcnow
 from app.errors import ErrorCode
@@ -60,19 +63,6 @@ CHUNK_OVERLAP_S = 5
 StageHandler = Callable[[int], Awaitable[CallStage | None]]
 
 
-def _paths() -> tuple[Path, Path]:
-    d = get_settings().data_dir / "audio"
-    return d / "raw", d / "norm"
-
-
-def _sha256(path: Path) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        while block := f.read(1024 * 1024):
-            h.update(block)
-    return h.hexdigest()
-
-
 def _load(session: Session, call_id: int) -> Call:
     call = session.get(Call, call_id)
     if call is None:
@@ -86,19 +76,22 @@ def _load(session: Session, call_id: int) -> Call:
 
 
 async def stage_download(call_id: int) -> CallStage | None:
-    raw_dir, _ = _paths()
     with Session(get_engine()) as s:
         call = _load(s, call_id)
-        if call.raw_path and Path(call.raw_path).exists():
+        if storage.exists(call.raw_path):
             return CallStage.preparing
         url = call.source_url
         emit(s, call, stage=CallStage.downloading, status=CallStatus.running, message="Downloading recording")
     if not url:
         raise StageError(ErrorCode.NOTHING_TO_PROCESS, detail="No file or link for this call")
-    got = await download(url, raw_dir)
+    with tempfile.TemporaryDirectory(prefix="limezip-") as tmp:
+        got = await download(url, Path(tmp))
+        raw_key = f"audio/raw/{got.path.name}"  # <sha256>.<ext>
+        if not storage.exists(raw_key):
+            await asyncio.to_thread(storage.put_file, raw_key, got.path)
     with Session(get_engine()) as s:
         call = _load(s, call_id)
-        call.raw_path, call.audio_sha256 = str(got.path), got.sha256
+        call.raw_path, call.audio_sha256 = raw_key, got.sha256
         # Dialer file names often carry the agent, campaign and call time — fill in what's missing.
         meta = dialer_filename.parse(got.filename, get_settings().default_timezone) if got.filename else {}
         call.agent_name = call.agent_name or str(meta.get("agent_name", ""))
@@ -118,49 +111,62 @@ async def stage_download(call_id: int) -> CallStage | None:
 
 
 async def stage_prepare(call_id: int) -> CallStage | None:
-    _, norm_dir = _paths()
-    settings = get_settings()
     with Session(get_engine()) as s:
         call = _load(s, call_id)
         emit(s, call, stage=CallStage.preparing, status=CallStatus.running, message="Checking the audio")
-        raw = Path(call.raw_path or "")
-        sha = call.audio_sha256
-    if not raw.exists():
+        raw_key, sha = call.raw_path, call.audio_sha256
+    if not raw_key or not storage.exists(raw_key):
         raise StageError(ErrorCode.NOTHING_TO_PROCESS, detail="Recording file is missing")
 
+    with storage.local_copy(raw_key) as raw:
+        duration = await _check_audio(call_id, raw)
+        if duration < MIN_DURATION_S:
+            raise StageError(ErrorCode.TOO_SHORT, skip=True)
+        sha = sha or await asyncio.to_thread(storage.sha256, raw_key)
+        norm_key = f"audio/norm/{sha}.mp3"
+        norm = raw.with_name("norm.mp3")
+        if storage.exists(norm_key):  # same recording seen before: reuse its normalised audio
+            await asyncio.to_thread(_save_local, norm_key, norm)
+        else:
+            try:
+                await audio.normalise(raw, norm)
+            except audio.AudioError as exc:
+                raise StageError(ErrorCode.NOT_AUDIO, detail=str(exc)[:120]) from exc
+        if await audio.max_volume_db(norm) < SILENT_BELOW_DB:
+            raise StageError(ErrorCode.SILENT, skip=True)
+        if not storage.exists(norm_key):
+            await asyncio.to_thread(storage.put_file, norm_key, norm, "audio/mpeg")
+
+    with Session(get_engine()) as s:
+        call = _load(s, call_id)
+        call.audio_sha256, call.audio_path = sha, norm_key
+        s.add(call)
+        s.commit()
+    return CallStage.transcribing
+
+
+async def _check_audio(call_id: int, raw: Path) -> float:
+    """Probe the recording, reject non-audio / too long, and save its duration. Returns the duration."""
     try:
         info = await audio.probe(raw)
     except audio.AudioError as exc:
         raise StageError(ErrorCode.NOT_AUDIO, detail=str(exc)[:120]) from exc
     if not info.has_audio:
         raise StageError(ErrorCode.NOT_AUDIO)
-    if info.duration_s > settings.max_recording_hours * 3600:
+    if info.duration_s > get_settings().max_recording_hours * 3600:
         raise StageError(ErrorCode.TOO_LONG)
-
     with Session(get_engine()) as s:
         call = _load(s, call_id)
         call.duration_s, call.channels = round(info.duration_s, 2), info.channels
         s.add(call)
         s.commit()
-    if info.duration_s < MIN_DURATION_S:
-        raise StageError(ErrorCode.TOO_SHORT, skip=True)
+    return info.duration_s
 
-    sha = sha or _sha256(raw)
-    norm = norm_dir / f"{sha}.mp3"
-    if not norm.exists():
-        try:
-            await audio.normalise(raw, norm)
-        except audio.AudioError as exc:
-            raise StageError(ErrorCode.NOT_AUDIO, detail=str(exc)[:120]) from exc
-    if await audio.max_volume_db(norm) < SILENT_BELOW_DB:
-        raise StageError(ErrorCode.SILENT, skip=True)
 
-    with Session(get_engine()) as s:
-        call = _load(s, call_id)
-        call.audio_sha256, call.audio_path = sha, str(norm)
-        s.add(call)
-        s.commit()
-    return CallStage.transcribing
+def _save_local(key: str, dest: Path) -> None:
+    with dest.open("wb") as f:
+        for data in storage.iter_parts(key):
+            f.write(data)
 
 
 # ---------------------------------------------------------------------------
@@ -175,7 +181,7 @@ async def stage_transcribe(call_id: int) -> CallStage | None:
         if s.exec(select(Transcript).where(Transcript.call_id == call_id)).first():
             return CallStage.analysing
         emit(s, call, stage=CallStage.transcribing, status=CallStatus.running, message="Transcribing")
-        sha, norm, duration = call.audio_sha256, Path(call.audio_path or ""), call.duration_s or 0
+        sha, norm_key, duration = call.audio_sha256, call.audio_path or "", call.duration_s or 0
         batch = s.get(Batch, call.batch_id)
         script = batch.transcript_script if batch else TranscriptScript(settings.default_transcript_script)
 
@@ -208,18 +214,20 @@ async def stage_transcribe(call_id: int) -> CallStage | None:
     transcriber = get_transcriber()
     # Speech-to-text output is saved before the speaker step, so a retry (e.g. after logging in to
     # Claude) doesn't redo the slow transcription.
-    raw_file = settings.data_dir / "transcripts_raw" / f"{sha or call_id}-{transcriber.name}.json"
-    if raw_file.exists():
-        raw_segments = json.loads(raw_file.read_text())
+    raw_key = f"transcripts_raw/{sha or call_id}-{transcriber.name}.json"
+    if storage.exists(raw_key):
+        raw_segments = json.loads(storage.read_bytes(raw_key))
     else:
+        if not storage.exists(norm_key):
+            raise StageError(ErrorCode.NOTHING_TO_PROCESS, detail="Recording file is missing")
         try:
-            raw_segments = await _transcribe_in_chunks(
-                norm, duration, str(script), settings.chunk_minutes * 60, call_id
-            )
+            with storage.local_copy(norm_key) as norm:
+                raw_segments = await _transcribe_in_chunks(
+                    norm, duration, str(script), settings.chunk_minutes * 60, call_id
+                )
         except ProviderError as exc:
             raise provider_stage_error(exc) from exc
-        raw_file.parent.mkdir(parents=True, exist_ok=True)
-        raw_file.write_text(json.dumps(raw_segments, ensure_ascii=False))
+        storage.put_bytes(raw_key, json.dumps(raw_segments, ensure_ascii=False).encode(), "application/json")
     if not raw_segments:
         raise StageError(ErrorCode.SILENT, skip=True)
 
@@ -496,12 +504,3 @@ def _update_batch(s: Session, batch_id: int, stage_seconds: float) -> None:
     batch.stats = stats
     s.add(batch)
     s.commit()
-
-
-def remove_raw_file(path: str | None) -> None:
-    if path:
-        p = Path(path)
-        if p.is_dir():
-            shutil.rmtree(p, ignore_errors=True)
-        else:
-            p.unlink(missing_ok=True)

@@ -4,7 +4,6 @@ import json
 import shutil
 import subprocess
 import time
-from datetime import datetime
 
 import httpx
 from fastapi import APIRouter, Depends
@@ -12,18 +11,17 @@ from pydantic import ValidationError
 from sqlalchemy import func, inspect, text
 from sqlmodel import Session, select
 
-from app import __version__
+from app import __version__, storage
 from app.config import Settings, get_business, get_settings, reload_business
 from app.db import get_engine, get_session, utcnow
 from app.errors import AppError, ErrorCode
 from app.models import Call, CallStatus
 from app.schemas import HealthCheck, HealthResponse, ProviderInfo, SettingsResponse, StatsResponse
-from app.worker import heartbeat_path
+from app.worker import last_heartbeat
 
 router = APIRouter(tags=["settings"])
 
 WORKER_ALIVE_WITHIN_S = 20
-LOW_DISK_GB = 5
 
 
 # ---------------------------------------------------------------------------
@@ -40,7 +38,14 @@ def _check_database() -> HealthCheck:
             return HealthCheck(
                 name="database", label="Database", state="fail", detail="Not set up yet. Run: make migrate"
             )
-        return HealthCheck(name="database", label="Database", state="ok", detail="Connected and migrated")
+        where = (
+            "SQLite file on this computer"
+            if engine.dialect.name == "sqlite"
+            else f"{engine.dialect.name} (cloud)"
+        )
+        return HealthCheck(
+            name="database", label="Database", state="ok", detail=f"Connected and migrated — {where}"
+        )
     except Exception as exc:
         return HealthCheck(name="database", label="Database", state="fail", detail=str(exc)[:200])
 
@@ -63,18 +68,18 @@ def _check_binary(name: str) -> HealthCheck:
 
 
 def _check_worker() -> HealthCheck:
-    path = heartbeat_path()
-    if not path.exists():
+    try:
+        beat = last_heartbeat()
+    except Exception as exc:
+        return HealthCheck(name="worker", label="Worker", state="fail", detail=str(exc)[:200])
+    if beat is None:
         return HealthCheck(
             name="worker",
             label="Worker",
             state="fail",
             detail="Not running. Start it with: make worker (make dev starts it too)",
         )
-    try:
-        age = (utcnow() - datetime.fromisoformat(path.read_text().strip())).total_seconds()
-    except ValueError:
-        return HealthCheck(name="worker", label="Worker", state="fail", detail="Heartbeat file is unreadable")
+    age = (utcnow() - beat).total_seconds()
     if age > WORKER_ALIVE_WITHIN_S:
         return HealthCheck(
             name="worker",
@@ -209,17 +214,15 @@ def _check_config() -> HealthCheck:
         return HealthCheck(name="config", label="Config files", state="fail", detail=str(exc)[:300])
 
 
-def _check_storage(s: Settings) -> HealthCheck:
+def _check_storage() -> HealthCheck:
+    """Recordings, uploads and spreadsheets are stored in the database (app/storage.py)."""
     try:
-        s.data_dir.mkdir(parents=True, exist_ok=True)
-        probe = s.data_dir / ".write-test"
-        probe.write_text("ok")
-        probe.unlink()
-        free_gb = shutil.disk_usage(s.data_dir).free / 1e9
-    except OSError as exc:
+        n, size = storage.total_size()
+    except Exception as exc:
         return HealthCheck(name="storage", label="Storage", state="fail", detail=str(exc)[:200])
-    state = "warn" if free_gb < LOW_DISK_GB else "ok"
-    return HealthCheck(name="storage", label="Storage", state=state, detail=f"{free_gb:.1f} GB free")
+    return HealthCheck(
+        name="storage", label="Storage", state="ok", detail=f"{n} files, {size / 1e6:.0f} MB in the database"
+    )
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -233,7 +236,7 @@ def health() -> HealthResponse:
         _check_provider("transcriber", s.transcriber, s),
         _check_provider("analyzer", s.analyzer, s),
         _check_config(),
-        _check_storage(s),
+        _check_storage(),
     ]
     status = "fail" if any(c.state == "fail" for c in checks) else "ok"
     return HealthResponse(status=status, version=__version__, checks=checks)

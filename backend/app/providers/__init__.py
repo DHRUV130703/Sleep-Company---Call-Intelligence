@@ -6,6 +6,7 @@ skipped for 10 minutes so every call doesn't waste a request.
 """
 
 import logging
+import tempfile
 import time
 from functools import lru_cache
 from pathlib import Path
@@ -126,7 +127,10 @@ def get_llm() -> LLM:
     if s.analyzer == "ollama":
         return OllamaClient(s.ollama_url, s.ollama_concurrency, s.ollama_context_tokens)
     if s.analyzer == "claude_cli":
-        return ClaudeCLI(s.claude_cli_path, s.claude_concurrency, s.data_dir / "claude-work")
+        # Scratch files only (prompt in, answer out): the system temp folder, not the data folder.
+        return ClaudeCLI(
+            s.claude_cli_path, s.claude_concurrency, Path(tempfile.gettempdir()) / "limezip-claude-work"
+        )
     return _gemini_client()
 
 
