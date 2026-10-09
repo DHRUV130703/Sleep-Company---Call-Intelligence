@@ -71,8 +71,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
 function SidebarFooter() {
   return (
-    <div className="mt-auto border-t px-5 py-4 text-[13px] text-muted-foreground">
-      Product by <span className="font-medium text-foreground">{PRODUCT_AUTHOR}</span>
+    <div className="mt-auto border-t px-5 py-4 text-[15px] text-muted-foreground">
+      Product by <span className="font-semibold text-foreground">{PRODUCT_AUTHOR}</span>
     </div>
   )
 }
