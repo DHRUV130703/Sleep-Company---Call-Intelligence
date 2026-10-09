@@ -91,6 +91,9 @@ def get_engine() -> Engine:
         isolation_level="READ COMMITTED",
         pool_pre_ping=True,  # cloud databases close idle connections
         pool_recycle=300,
+        # Insert rows one by one: SQLAlchemy's batched multi-row INSERT sends empty values (e.g. a
+        # missing due date) that CockroachDB can't type ("could not determine data type of placeholder").
+        use_insertmanyvalues=False,
     )
 
 

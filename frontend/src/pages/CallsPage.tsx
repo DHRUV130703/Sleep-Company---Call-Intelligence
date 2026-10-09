@@ -1,5 +1,5 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Phone, Search } from 'lucide-react'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ChevronLeft, ChevronRight, Phone, RotateCcw, Search } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { AgentChip } from '@/components/AgentChip'
@@ -197,7 +197,12 @@ function CallsTable({ rows }: { rows: CallRow[] }) {
             <TableCell className="num">{c.call_datetime ? formatDateTime(c.call_datetime) : '—'}</TableCell>
             <TableCell className="num text-right">{c.duration_s != null ? formatClock(c.duration_s) : '—'}</TableCell>
             <TableCell>
-              <CallStatusPill stage={c.stage} status={c.status} />
+              <div className="flex items-center gap-2">
+                <span title={c.status === 'failed' ? (c.error_message ?? undefined) : undefined}>
+                  <CallStatusPill stage={c.stage} status={c.status} />
+                </span>
+                {c.status === 'failed' && <RetryButton call={c} />}
+              </div>
             </TableCell>
             <TableCell>{c.outcome ? (OUTCOME_LABELS[c.outcome] ?? humanize(c.outcome)) : '—'}</TableCell>
             <TableCell>
@@ -208,6 +213,29 @@ function CallsTable({ rows }: { rows: CallRow[] }) {
         ))}
       </TableBody>
     </Table>
+  )
+}
+
+/** Re-queues a failed call from the stage where it stopped. The table refreshes itself while it runs. */
+function RetryButton({ call }: { call: CallRow }) {
+  const qc = useQueryClient()
+  const retry = useMutation({
+    mutationFn: () => callsApi.retry(call.id),
+    onSettled: () => qc.invalidateQueries({ queryKey: ['calls'] }),
+  })
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="h-6 gap-1 px-2 text-xs"
+      onClick={() => retry.mutate()}
+      disabled={retry.isPending}
+      aria-label={`Retry ${call.label}`}
+      title={retry.isError ? retry.error.message : (call.error_message ?? 'Try this call again')}
+    >
+      <RotateCcw className={retry.isPending ? 'size-3 animate-spin motion-reduce:animate-none' : 'size-3'} aria-hidden />
+      Retry
+    </Button>
   )
 }
 
