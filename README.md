@@ -43,6 +43,7 @@ claude auth login
 | `make migrate` | Apply database changes |
 | `make migration name="…"` | Create a database change after editing `backend/app/models.py` |
 | `make export-sqlite` | Export report data (calls, scores, transcripts, AI vs Human plan) to `exports/limezip-reports-<date>.db` — open with `sqlite3` or DB Browser for SQLite |
+| *(no command)* | In the cloud database's SQL console the same report tables exist as live views (`verdict`, `improvement_plan`, `call_scores`, `calls_report`, `call_rca_issues`, … — see `backend/app/report_views.sql`) |
 | `make move-to-cloud` | One time: copy the local `data/` folder (database + files) into the cloud database in `DATABASE_URL` |
 
 ## How it fits together

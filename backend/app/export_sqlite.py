@@ -17,6 +17,8 @@ be opened with `sqlite3` or DB Browser for SQLite and queried directly:
     recommended_changes   AI-written changes to the bot
 
 Reads the live database (DATABASE_URL); never changes it. Phone numbers follow MASK_PHONES.
+The cloud database has views with the same names (app/report_views.sql), so the same queries work in
+its SQL console.
 """
 
 import sqlite3
@@ -147,7 +149,10 @@ def _report_tables(s: Session) -> dict[str, Rows]:
     latest = None
     for cmp in s.exec(select(Comparison).order_by(col(Comparison.id).desc())):
         sc = cmp.result.get("scope") or {}
-        if cmp.result.get("version") == RESULT_VERSION and not sc.get("batch_ids") and not sc.get("campaign"):
+        all_calls = not (
+            sc.get("batch_ids") or sc.get("campaign") or sc.get("date_from") or sc.get("date_to")
+        )
+        if cmp.result.get("version") == RESULT_VERSION and all_calls and not sc.get("comparable_only"):
             latest = cmp.result
             break
     if latest is None:
