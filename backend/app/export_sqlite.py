@@ -15,6 +15,7 @@ be opened with `sqlite3` or DB Browser for SQLite and queried directly:
     root_causes           repeated bot failures (+ root_cause_calls: every call where it happened)
     call_rca_issues       every issue in every bot call, on the call's timeline
     recommended_changes   AI-written changes to the bot
+    saved_reports         every saved report file (PDF, Word, Excel, CSV, JSON) with its public link
 
 Reads the live database (DATABASE_URL); never changes it. Phone numbers follow MASK_PHONES.
 The cloud database has views with the same names (app/report_views.sql), so the same queries work in
@@ -32,7 +33,7 @@ from sqlmodel import Session, col, select
 import app.models  # noqa: F401  (registers every table)
 from app.config import PROJECT_ROOT
 from app.db import get_engine
-from app.models import Analysis, Call, Comparison, Lead, Transcript
+from app.models import Analysis, Call, Comparison, Lead, SavedReport, Transcript
 from app.pipeline.compare import RESULT_VERSION
 from app.pipeline.leads import display_phone
 
@@ -207,7 +208,21 @@ def main() -> None:
     path.unlink(missing_ok=True)
     print(f"Exporting report data to {path} …")
     with Session(get_engine()) as s:
-        tables = {**_call_tables(s), "transcript_lines": _transcripts(s), **_report_tables(s)}
+        tables = {
+            **_call_tables(s),
+            "transcript_lines": _transcripts(s),
+            **_report_tables(s),
+            "saved_reports": [
+                {
+                    "format": r.format,
+                    "filename": r.filename,
+                    "size": r.size,
+                    "url": r.url,
+                    "created_at": r.created_at,
+                }
+                for r in s.exec(select(SavedReport).order_by(col(SavedReport.id).desc()))
+            ],
+        }
     db = sqlite3.connect(path)
     with db:
         for name, rows in tables.items():

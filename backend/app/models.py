@@ -298,4 +298,4 @@ class TranscriptCache(SQLModel, table=True):
 
 
 # File storage and worker heartbeat tables live in their own module; import them so they are registered.
-from app.models_storage import Blob, BlobPart, WorkerHeartbeat  # noqa: E402, F401
+from app.models_storage import Blob, BlobPart, SavedReport, WorkerHeartbeat  # noqa: E402, F401

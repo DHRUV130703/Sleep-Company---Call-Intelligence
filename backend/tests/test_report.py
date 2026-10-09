@@ -92,3 +92,22 @@ def test_print_page_escapes_text_and_can_open_print_dialog():
     assert '<a href="/calls/1?t=3">' in page  # quotes open the call at that moment
     assert "window.print()" in page and "@page" in page
     assert "<script>" not in render_html(build_outline(RESULT), auto_print=False).split("</style>")[1]
+
+
+def test_pdf_is_made_on_the_server_with_hindi_text():
+    from app.pipeline.report_pdf import render_pdf
+
+    data = render_pdf(build_outline(RESULT), "https://app.example.com")
+    assert data.startswith(b"%PDF") and len(data) > 5000
+    assert b"https://app.example.com/calls/1?t=3" in data  # quote sources link to the call moment
+
+
+def test_excel_has_one_sheet_per_part():
+    from openpyxl import load_workbook
+
+    from app.pipeline.report_xlsx import render_xlsx
+
+    wb = load_workbook(io.BytesIO(render_xlsx(RESULT, [{"call_id": 1, "label": "A1"}])))
+    assert wb.sheetnames == ["Verdict", "Improvement plan", "Root causes", "Root cause calls", "Call RCA",
+                             "Recommended changes", "Scores per call"]  # fmt: skip
+    assert wb["Recommended changes"]["E2"].value == "Ji, offer price 24,999 hai"

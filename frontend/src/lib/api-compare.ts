@@ -1,7 +1,7 @@
 // API calls and URL helpers for the AI vs Human report. Uses the shared `request` from api.ts.
 
 import { request } from './api'
-import type { CompareOptions, CompareResult, CompareScope } from './types-compare'
+import type { CompareOptions, CompareResult, CompareScope, ReportFormat, SavedReport } from './types-compare'
 
 // ---------------------------------------------------------------------------
 // Scope <-> page URL (?batches=1,2&campaign=…&from=…&to=…&comparable=1)
@@ -55,8 +55,11 @@ export const compareApi = {
   /** Re-analyse bot calls reviewed with an older prompt (they lack "better" lines). */
   updateBotReviews: (scope: CompareScope) =>
     request<{ queued: number }>(`/compare/update-bot-reviews${scopeQuery(scope)}`, { method: 'POST' }),
-  /** Plain download links (used in <a href download>). */
-  exportUrl: (scope: CompareScope, kind: 'csv' | 'json' | 'docx') => `/api/compare/export.${kind}${scopeQuery(scope)}`,
+  /** Plain download links (used in <a href download>). Each download is also saved with a public link. */
+  exportUrl: (scope: CompareScope, kind: ReportFormat) => `/api/compare/export.${kind}${scopeQuery(scope)}`,
+  /** Save the report in every format; returns their public links. */
+  saveAll: (scope: CompareScope) =>
+    request<{ reports: SavedReport[] }>(`/compare/reports${scopeQuery(scope)}`, { method: 'POST' }),
   /** Print-ready report page; opens the browser's "Save as PDF" dialog. */
   reportUrl: (scope: CompareScope) => {
     const qs = scopeQuery(scope)

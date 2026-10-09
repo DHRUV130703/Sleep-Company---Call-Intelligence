@@ -1,8 +1,5 @@
 """AI voice bot vs human agents (PRD §6.6). Same query parameters on every endpoint."""
 
-import csv
-import io
-import json
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query
@@ -10,19 +7,15 @@ from fastapi.responses import HTMLResponse, Response
 from sqlalchemy import func
 from sqlmodel import Session, col, select
 
+from app import storage
 from app.api.batches import requeue_call
 from app.db import get_session
+from app.errors import AppError, ErrorCode
 from app.models import Batch, Call, CallStage
-from app.pipeline.compare import (
-    build_comparison,
-    cached_comparison,
-    export_rows,
-    outdated_bot_calls,
-    parse_scope,
-)
+from app.pipeline.compare import build_comparison, cached_comparison, outdated_bot_calls, parse_scope
 from app.pipeline.report import build_outline
-from app.pipeline.report_docx import render_docx
 from app.pipeline.report_html import render_html
+from app.pipeline.saved_reports import FORMATS, report_row, save_report
 
 router = APIRouter(tags=["compare"])
 
@@ -84,31 +77,32 @@ def options(session: Session = Depends(get_session)) -> dict:
     return {"batches": batches, "campaigns": campaigns}
 
 
-@router.get("/compare/export.csv")
-async def export_csv(scope: dict = Depends(_scope), session: Session = Depends(get_session)) -> Response:
+@router.get("/compare/export.{fmt}")
+async def export_report(
+    fmt: str, scope: dict = Depends(_scope), session: Session = Depends(get_session)
+) -> Response:
+    """Download the report as pdf / docx / xlsx / csv / json. Every download is also saved (file in the
+    database + a row in `reports` with its public link); the link is returned in the X-Report-Url header."""
+    if fmt not in FORMATS:
+        raise AppError(ErrorCode.NOT_FOUND, f"Unknown report format: {fmt}")
     result = await _result(session, scope, False)
-    rows = export_rows(result, session)
-    buf = io.StringIO()
-    if rows:
-        writer = csv.DictWriter(buf, fieldnames=list(rows[0]))
-        writer.writeheader()
-        writer.writerows(rows)
+    report = save_report(session, scope, result, fmt)
     return Response(
-        buf.getvalue(),
-        media_type="text/csv",
-        headers={"Content-Disposition": 'attachment; filename="ai-vs-human-scores.csv"'},
+        storage.read_bytes(report.storage_key),
+        media_type=report.content_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{report.filename}"',
+            "X-Report-Url": report.url,
+            "Access-Control-Expose-Headers": "X-Report-Url",
+        },
     )
 
 
-@router.get("/compare/export.docx")
-async def export_docx(scope: dict = Depends(_scope), session: Session = Depends(get_session)) -> Response:
-    """The full report as a Word document, to share with teams."""
+@router.post("/compare/reports")
+async def save_all_formats(scope: dict = Depends(_scope), session: Session = Depends(get_session)) -> dict:
+    """Save the current report in every format and return their public links."""
     result = await _result(session, scope, False)
-    return Response(
-        render_docx(build_outline(result)),
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers={"Content-Disposition": f'attachment; filename="{_report_name(result)}.docx"'},
-    )
+    return {"reports": [report_row(save_report(session, scope, result, fmt)) for fmt in FORMATS]}
 
 
 @router.get("/compare/report.html", response_class=HTMLResponse)
@@ -120,17 +114,3 @@ async def report_html(
     """The full report as a print-ready page. With ?print=1 the browser's "Save as PDF" dialog opens."""
     result = await _result(session, scope, False)
     return HTMLResponse(render_html(build_outline(result), auto_print=auto_print))
-
-
-def _report_name(result: dict) -> str:
-    return "ai-vs-human-report-" + str(result.get("generated_at", ""))[:10]
-
-
-@router.get("/compare/export.json")
-async def export_json(scope: dict = Depends(_scope), session: Session = Depends(get_session)) -> Response:
-    result = await _result(session, scope, False)
-    return Response(
-        json.dumps(result, ensure_ascii=False, indent=2),
-        media_type="application/json",
-        headers={"Content-Disposition": 'attachment; filename="ai-vs-human-results.json"'},
-    )

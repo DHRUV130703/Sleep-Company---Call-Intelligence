@@ -138,11 +138,31 @@ async def test_full_flow(session, fake_ai, tmp_path):
         e["call_id"] != 999999 for e in change["examples"]
     )  # unknown ids dropped
     assert cmp["sample_warning"]
-    assert client.get("/api/compare/export.csv").text.startswith("call_id,label,agent_type")
-
-    # Shareable report: Word file and print-ready page contain every section.
     import io as _io
 
+    csv_res = client.get("/api/compare/export.csv")
+    assert csv_res.content.decode("utf-8-sig").startswith("call_id,label,agent_type")
+
+    # Every download is saved with a public link; the same report is never made twice.
+    pdf_res = client.get("/api/compare/export.pdf")
+    assert pdf_res.content.startswith(b"%PDF") and pdf_res.headers["content-type"] == "application/pdf"
+    link = pdf_res.headers["x-report-url"]
+    assert "/api/reports/" in link and link.endswith(".pdf")
+    assert client.get("/api/compare/export.pdf").headers["x-report-url"] == link  # reused, not re-made
+    public = client.get(link.split("localhost:5173", 1)[1])  # the public link serves the stored file
+    assert public.status_code == 200 and public.content == pdf_res.content
+    assert client.get(link.split("localhost:5173", 1)[1].rsplit("/", 1)[0] + "/other.pdf").status_code == 404
+    saved = client.post("/api/compare/reports").json()["reports"]
+    assert sorted(r["format"] for r in saved) == ["csv", "docx", "json", "pdf", "xlsx"]
+    assert len(client.get("/api/reports").json()["reports"]) == 5
+
+    from openpyxl import load_workbook
+
+    xlsx = load_workbook(_io.BytesIO(client.get("/api/compare/export.xlsx").content))
+    assert xlsx.sheetnames[:3] == ["Verdict", "Improvement plan", "Root causes"]
+    assert xlsx["Improvement plan"]["C2"].value  # first ranked parameter
+
+    # Shareable report: Word file and print-ready page contain every section.
     from docx import Document
 
     docx_res = client.get("/api/compare/export.docx")

@@ -282,3 +282,16 @@ export interface CompareScope {
   dateTo: string
   comparableOnly: boolean
 }
+
+export type ReportFormat = 'pdf' | 'docx' | 'xlsx' | 'csv' | 'json'
+
+/** A stored report file with its public download link (backend `reports` table). */
+export interface SavedReport {
+  id: number
+  format: ReportFormat
+  filename: string
+  size: number
+  url: string
+  report_built_at: string
+  created_at: string
+}

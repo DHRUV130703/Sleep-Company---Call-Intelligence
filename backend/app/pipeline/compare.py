@@ -67,7 +67,7 @@ def _as_utc(iso: str) -> datetime:
     return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
 
 
-def _scope_hash(scope: dict[str, Any]) -> str:
+def scope_key(scope: dict[str, Any]) -> str:
     return hashlib.sha1(json.dumps(scope, sort_keys=True, default=str).encode()).hexdigest()[:16]
 
 
@@ -85,7 +85,7 @@ def cached_comparison(session: Session, scope: dict[str, Any]) -> dict[str, Any]
     cached = session.exec(
         select(Comparison)
         .where(
-            Comparison.scope_hash == _scope_hash(scope),
+            Comparison.scope_hash == scope_key(scope),
             Comparison.data_version == data_version(session, scope),
         )
         .order_by(col(Comparison.id).desc())
@@ -241,7 +241,7 @@ async def build_comparison(session: Session, scope: dict[str, Any]) -> dict[str,
         result["synthesis_error"] = "Each side needs at least one analysed call for the written comparison."
 
     session.add(
-        Comparison(scope_hash=_scope_hash(scope), data_version=data_version(session, scope), result=result)
+        Comparison(scope_hash=scope_key(scope), data_version=data_version(session, scope), result=result)
     )
     session.commit()
     return result

@@ -82,6 +82,9 @@ class Settings(BaseSettings):
 
     # Server (the API port is fixed at 8000 — see Makefile and frontend/vite.config.ts)
     frontend_origin: str = "http://localhost:5173"
+    # Base of the public report links stored with each saved report. Empty = frontend_origin (works on this
+    # computer only); set it to the app's public address once it is deployed.
+    public_base_url: str = ""
 
     @field_validator("data_dir")
     @classmethod

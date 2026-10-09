@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
-from app.api import batches, calls, compare, leads, uploads
+from app.api import batches, calls, compare, leads, reports, uploads
 from app.api import settings as settings_api
 from app.config import get_settings
 from app.errors import install_error_handlers
@@ -37,5 +37,6 @@ for router in (
     calls.router,
     leads.router,
     compare.router,
+    reports.router,
 ):
     app.include_router(router, prefix="/api")

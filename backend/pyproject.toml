@@ -22,6 +22,8 @@ dependencies = [
     "sqlalchemy-cockroachdb>=2.0",
     "psycopg[binary]>=3.2",
     "certifi>=2026.7.22",
+    "fpdf2>=2.8",
+    "uharfbuzz>=0.39",
 ]
 
 [project.optional-dependencies]

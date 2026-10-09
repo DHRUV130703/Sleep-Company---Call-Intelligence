@@ -75,7 +75,7 @@ def _records(r: dict[str, Any]) -> Section:
         Table(["", "AI voice bot", "Human agents", "Total"], rows),
     ]
     if r.get("sample_warning"):
-        blocks.append(Para(f"⚠ Small sample. {r['sample_warning']}"))
+        blocks.append(Para(f"Small sample. {r['sample_warning']}"))
     return Section("Records", blocks)
 
 
