@@ -1,22 +1,19 @@
 import { useQuery } from '@tanstack/react-query'
-import { Layers, Search, X } from 'lucide-react'
+import { Search, X } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { LEAD_FILTER_KEYS, leadsApi } from '@/lib/api-leads'
 import { INTENT_LABELS, LEAD_STATUS_LABELS } from '@/lib/labels'
 import { cn } from '@/lib/utils'
 import { dateLabel } from '@/lib/leads-format'
-import { DateRangeFilter } from './filter-controls'
+import { DateRangeFilter, SourceFilter } from './filter-controls'
 
 const AGENT_TYPES = [
   { value: '', label: 'All' },
   { value: 'ai', label: 'AI' }, // AI always on the left, Human on the right.
   { value: 'human', label: 'Human' },
 ]
-
-const ALL_SOURCES = 'all' // Radix Select can't use '' as a value.
 
 /**
  * Filters for All Conversations (PRD §6.3): search, AI / Human, date and source (upload batch).
@@ -55,14 +52,30 @@ export function FilterBar() {
     searchTimer.current = window.setTimeout(() => update({ q: value.trim() }), 300)
   }
 
+  const toggleSource = (id: string) => {
+    const current = (new URLSearchParams(window.location.search).get('batch_id') ?? '').split(',').filter(Boolean)
+    update({ batch_id: (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]).join(',') })
+  }
+
+  const removeChip = (c: Chip) => {
+    if (c.sourceId) return toggleSource(c.sourceId)
+    if (c.keys.includes('q')) setQuery('')
+    update(Object.fromEntries(c.keys.map((k) => [k, ''])))
+  }
+
   const clearAll = () => {
     window.clearTimeout(searchTimer.current)
     setQuery('')
     setParams(new URLSearchParams(), { replace: true })
   }
 
-  const sources = (options.data?.batches ?? []).map((b) => ({ value: String(b.id), label: b.name }))
-  const source = params.get('batch_id') ?? ''
+  const batches = options.data?.batches ?? []
+  // Two batches can share a name (made in the same minute): add the batch number to tell them apart.
+  const sources = batches.map((b) => ({
+    value: String(b.id),
+    label: batches.filter((x) => x.name === b.name).length > 1 ? `${b.name} · #${b.id}` : b.name,
+  }))
+  const selectedSources = (params.get('batch_id') ?? '').split(',').filter(Boolean)
 
   const from = params.get('date_from') ?? ''
   const to = params.get('date_to') ?? ''
@@ -107,31 +120,24 @@ export function FilterBar() {
         </div>
 
         <DateRangeFilter from={from} to={to} onChange={(f, t) => update({ date_from: f, date_to: t })} />
-        <Select value={source || ALL_SOURCES} onValueChange={(v) => update({ batch_id: v === ALL_SOURCES ? '' : v })}>
-          <SelectTrigger aria-label="Source" className={cn('h-9 max-w-60 bg-surface data-[size=default]:h-9', source && 'border-foreground/40')}>
-            <Layers className="size-4 text-muted-foreground" aria-hidden />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL_SOURCES}>All sources</SelectItem>
-            {sources.map((o) => (
-              <SelectItem key={o.value} value={o.value}>
-                {o.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <SourceFilter
+          options={sources}
+          selected={selectedSources}
+          loading={options.isPending}
+          onToggle={toggleSource}
+          onClear={() => update({ batch_id: '' })}
+        />
       </div>
 
       {chips.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5" aria-label="Active filters">
           {chips.map((c) => (
-            <span key={c.label} className="inline-flex h-7 items-center gap-1 rounded-full border bg-surface pr-1 pl-3 text-[13px]">
+            <span key={`${c.name}-${c.sourceId ?? c.label}`} className="inline-flex h-7 items-center gap-1 rounded-full border bg-surface pr-1 pl-3 text-[13px]">
               <span className="text-muted-foreground">{c.name}:</span>
               <span className="max-w-48 truncate font-medium">{c.label}</span>
               <button
                 type="button"
-                onClick={() => (c.keys.includes('q') ? (setQuery(''), update({ q: '' })) : update(Object.fromEntries(c.keys.map((k) => [k, '']))))}
+                onClick={() => removeChip(c)}
                 aria-label={`Remove filter ${c.name}: ${c.label}`}
                 className="grid size-5 place-items-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
               >
@@ -163,6 +169,7 @@ interface Chip {
   name: string
   label: string
   keys: string[] // URL params this chip clears
+  sourceId?: string // one of several selected sources: removing the chip removes just this one
 }
 
 function activeChips(params: URLSearchParams, sources: Option[], from: string, to: string): Chip[] {
@@ -172,8 +179,10 @@ function activeChips(params: URLSearchParams, sources: Option[], from: string, t
   const agent = params.get('agent_type')
   if (agent) chips.push({ name: 'Agent', label: agent === 'ai' ? 'AI voice bot' : 'Human', keys: ['agent_type'] })
   if (from || to) chips.push({ name: 'Date', label: dateLabel(from, to), keys: ['date_from', 'date_to'] })
-  const source = params.get('batch_id')
-  if (source) chips.push({ name: 'Source', label: sources.find((o) => o.value === source)?.label ?? `Batch #${source}`, keys: ['batch_id'] })
+  const picked = (params.get('batch_id') ?? '').split(',').filter(Boolean)
+  for (const id of picked) {
+    chips.push({ name: 'Source', label: sources.find((o) => o.value === id)?.label ?? `Batch #${id}`, keys: ['batch_id'], sourceId: id })
+  }
   const intent = params.get('intent_bucket')
   if (intent) chips.push({ name: 'Intent', label: INTENT_LABELS[intent] ?? intent, keys: ['intent_bucket'] })
   // Filters set elsewhere (KPI cards, an old shared link): still shown, so they can be removed.

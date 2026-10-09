@@ -38,7 +38,7 @@ class LeadFilters(BaseModel):
     date_from: datetime | None = None
     date_to: datetime | None = None
     q: str = ""
-    batch_id: int | None = None
+    batch_ids: list[int] = []  # one or more upload batches ("source")
     campaign: str = ""
     owner: str = ""
     agent_type: str = ""
@@ -51,7 +51,7 @@ def _filters(
     date_from: datetime | None = None,
     date_to: datetime | None = None,
     q: str = "",
-    batch_id: int | None = None,
+    batch_id: str = "",  # one id, or several separated by commas: "3,5,8"
     campaign: str = "",
     owner: str = "",
     agent_type: str = "",
@@ -69,7 +69,7 @@ def _filters(
         date_from=date_from,
         date_to=date_to,
         q=q,
-        batch_id=batch_id,
+        batch_ids=sorted({int(x) for x in batch_id.split(",") if x.strip().isdigit()}),
         campaign=campaign,
         owner=owner,
         agent_type=agent_type,
@@ -81,8 +81,8 @@ def _filters(
 
 def _call_filters(f: LeadFilters) -> list[Any]:
     out: list[Any] = []
-    if f.batch_id:
-        out.append(Call.batch_id == f.batch_id)
+    if f.batch_ids:
+        out.append(col(Call.batch_id).in_(f.batch_ids))
     if f.campaign:
         out.append(Call.campaign == f.campaign)
     if f.owner:

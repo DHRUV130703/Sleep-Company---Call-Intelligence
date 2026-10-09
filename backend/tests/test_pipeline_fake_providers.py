@@ -110,6 +110,9 @@ async def test_full_flow(session, fake_ai, tmp_path):
 
     leads = client.get("/api/leads").json()
     assert leads["total"] == 3
+    batch_id = batch["id"]
+    assert client.get(f"/api/leads?batch_id={batch_id},999").json()["total"] == 3  # several sources at once
+    assert client.get("/api/leads?batch_id=999").json()["total"] == 0
     kpis = client.get("/api/leads/kpis").json()
     assert kpis["intent"]["not_available"] == 1  # the too-short call
 
