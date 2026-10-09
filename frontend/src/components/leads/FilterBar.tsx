@@ -58,7 +58,6 @@ export function FilterBar() {
   }
 
   const removeChip = (c: Chip) => {
-    if (c.sourceId) return toggleSource(c.sourceId)
     if (c.keys.includes('q')) setQuery('')
     update(Object.fromEntries(c.keys.map((k) => [k, ''])))
   }
@@ -79,7 +78,7 @@ export function FilterBar() {
 
   const from = params.get('date_from') ?? ''
   const to = params.get('date_to') ?? ''
-  const chips = activeChips(params, sources, from, to)
+  const chips = activeChips(params, from, to)
 
   return (
     <section aria-label="Filters" className="mb-6 space-y-3">
@@ -132,7 +131,7 @@ export function FilterBar() {
       {chips.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5" aria-label="Active filters">
           {chips.map((c) => (
-            <span key={`${c.name}-${c.sourceId ?? c.label}`} className="inline-flex h-7 items-center gap-1 rounded-full border bg-surface pr-1 pl-3 text-[13px]">
+            <span key={`${c.name}-${c.label}`} className="inline-flex h-7 items-center gap-1 rounded-full border bg-surface pr-1 pl-3 text-[13px]">
               <span className="text-muted-foreground">{c.name}:</span>
               <span className="max-w-48 truncate font-medium">{c.label}</span>
               <button
@@ -160,36 +159,27 @@ export function FilterBar() {
   )
 }
 
-interface Option {
-  value: string
-  label: string
-}
-
 interface Chip {
   name: string
   label: string
   keys: string[] // URL params this chip clears
-  sourceId?: string // one of several selected sources: removing the chip removes just this one
 }
 
-function activeChips(params: URLSearchParams, sources: Option[], from: string, to: string): Chip[] {
+function activeChips(params: URLSearchParams, from: string, to: string): Chip[] {
   const chips: Chip[] = []
   const q = params.get('q')
   if (q) chips.push({ name: 'Search', label: `“${q}”`, keys: ['q'] })
   const agent = params.get('agent_type')
   if (agent) chips.push({ name: 'Agent', label: agent === 'ai' ? 'AI voice bot' : 'Human', keys: ['agent_type'] })
   if (from || to) chips.push({ name: 'Date', label: dateLabel(from, to), keys: ['date_from', 'date_to'] })
-  const picked = (params.get('batch_id') ?? '').split(',').filter(Boolean)
-  for (const id of picked) {
-    chips.push({ name: 'Source', label: sources.find((o) => o.value === id)?.label ?? `Batch #${id}`, keys: ['batch_id'], sourceId: id })
-  }
   const intent = params.get('intent_bucket')
   if (intent) chips.push({ name: 'Intent', label: INTENT_LABELS[intent] ?? intent, keys: ['intent_bucket'] })
+  // Sources are not shown as chips: the Source button already says what is picked.
   // Filters set elsewhere (KPI cards, an old shared link): still shown, so they can be removed.
   const names: Record<string, string> = { campaign: 'Campaign', owner: 'Owner', status: 'Status', status_category: 'Status category' }
   for (const k of LEAD_FILTER_KEYS) {
     const v = params.get(k)
-    if (v && !chips.some((c) => c.keys.includes(k))) {
+    if (v && k !== 'batch_id' && !chips.some((c) => c.keys.includes(k))) {
       chips.push({ name: names[k] ?? k, label: k === 'status' ? (LEAD_STATUS_LABELS[v] ?? v) : v, keys: [k] })
     }
   }
