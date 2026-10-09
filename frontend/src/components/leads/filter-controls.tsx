@@ -1,16 +1,11 @@
-// The two popover controls of the All Conversations filter bar: date range and "Filters".
+// The date range control of the All Conversations filter bar: presets plus a custom range.
 
-import { CalendarDays, ChevronDown, SlidersHorizontal } from 'lucide-react'
+import { CalendarDays, ChevronDown } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DATE_PRESETS, dateLabel, isoDay } from '@/lib/leads-format'
 import { cn } from '@/lib/utils'
-
-// ---------------------------------------------------------------------------
-// Date range
-// ---------------------------------------------------------------------------
 
 interface DateRangeProps {
   from: string
@@ -81,69 +76,6 @@ export function DateRangeFilter({ from, to, onChange }: DateRangeProps) {
               />
             </label>
           </div>
-        </div>
-      </PopoverContent>
-    </Popover>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// "Filters" popover: the less-used filters, each a labelled dropdown
-// ---------------------------------------------------------------------------
-
-export interface FilterField {
-  key: string
-  label: string
-  value: string
-  options: { value: string; label: string }[]
-}
-
-const ANY = 'any' // Radix Select can't use '' as a value.
-
-export function MoreFilters({ fields, onChange, onClear }: { fields: FilterField[]; onChange: (key: string, value: string) => void; onClear: () => void }) {
-  const count = fields.filter((f) => f.value).length
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="outline" className={cn('h-9 bg-surface', count > 0 && 'border-foreground/40')}>
-          <SlidersHorizontal className="size-4 text-muted-foreground" aria-hidden />
-          Filters
-          {count > 0 && (
-            <span className="num grid size-5 place-items-center rounded-full bg-foreground text-[11px] font-semibold text-background">
-              {count}
-              <span className="sr-only"> active</span>
-            </span>
-          )}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-80 p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="font-medium">Filters</h3>
-          {count > 0 && (
-            <Button variant="ghost" size="xs" onClick={onClear}>
-              Clear
-            </Button>
-          )}
-        </div>
-        <div className="space-y-3">
-          {fields.map((f) => (
-            <label key={f.key} className="block">
-              <span className="mb-1 block text-xs font-medium text-muted-foreground">{f.label}</span>
-              <Select value={f.value || ANY} onValueChange={(v) => onChange(f.key, v === ANY ? '' : v)}>
-                <SelectTrigger aria-label={f.label} className="w-full bg-surface">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ANY}>Any</SelectItem>
-                  {f.options.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </label>
-          ))}
         </div>
       </PopoverContent>
     </Popover>

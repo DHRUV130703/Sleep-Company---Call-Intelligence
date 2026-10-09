@@ -1,19 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
-import { Search, X } from 'lucide-react'
+import { Layers, Search, X } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { LEAD_FILTER_KEYS, leadsApi } from '@/lib/api-leads'
 import { INTENT_LABELS, LEAD_STATUS_LABELS } from '@/lib/labels'
 import { cn } from '@/lib/utils'
 import { dateLabel } from '@/lib/leads-format'
-import { DateRangeFilter, type FilterField, MoreFilters } from './filter-controls'
-
-const STATUS_CATEGORIES = [
-  { value: 'in_progress', label: 'In progress' },
-  { value: 'won', label: 'Won' },
-  { value: 'lost', label: 'Lost' },
-]
+import { DateRangeFilter } from './filter-controls'
 
 const AGENT_TYPES = [
   { value: '', label: 'All' },
@@ -21,11 +16,11 @@ const AGENT_TYPES = [
   { value: 'human', label: 'Human' },
 ]
 
-const MORE_KEYS = ['batch_id', 'campaign', 'owner', 'status', 'status_category'] as const
+const ALL_SOURCES = 'all' // Radix Select can't use '' as a value.
 
 /**
- * Filters for All Conversations (PRD §6.3): search, AI / Human, date, and a "Filters" popover for the
- * rest. Active filters show as removable chips. Everything lives in the URL, so a filtered view can be
+ * Filters for All Conversations (PRD §6.3): search, AI / Human, date and source (upload batch).
+ * Active filters show as removable chips. Everything lives in the URL, so a filtered view can be
  * shared as a link; changing a filter jumps back to page 1.
  */
 export function FilterBar() {
@@ -66,23 +61,12 @@ export function FilterBar() {
     setParams(new URLSearchParams(), { replace: true })
   }
 
-  const o = options.data
-  const fields: FilterField[] = [
-    { key: 'batch_id', label: 'Source (batch)', value: params.get('batch_id') ?? '',
-      options: (o?.batches ?? []).map((b) => ({ value: String(b.id), label: b.name })) },
-    { key: 'campaign', label: 'Campaign', value: params.get('campaign') ?? '',
-      options: (o?.campaigns ?? []).map((c) => ({ value: c, label: c })) },
-    { key: 'owner', label: 'Owner', value: params.get('owner') ?? '',
-      options: (o?.owners ?? []).map((n) => ({ value: n, label: n })) },
-    { key: 'status', label: 'Status', value: params.get('status') ?? '',
-      options: (o?.statuses ?? []).map((s) => ({ value: s, label: LEAD_STATUS_LABELS[s] ?? s })) },
-    { key: 'status_category', label: 'Status category', value: params.get('status_category') ?? '',
-      options: STATUS_CATEGORIES },
-  ]
+  const sources = (options.data?.batches ?? []).map((b) => ({ value: String(b.id), label: b.name }))
+  const source = params.get('batch_id') ?? ''
 
   const from = params.get('date_from') ?? ''
   const to = params.get('date_to') ?? ''
-  const chips = activeChips(params, fields, from, to)
+  const chips = activeChips(params, sources, from, to)
 
   return (
     <section aria-label="Filters" className="mb-6 space-y-3">
@@ -123,11 +107,20 @@ export function FilterBar() {
         </div>
 
         <DateRangeFilter from={from} to={to} onChange={(f, t) => update({ date_from: f, date_to: t })} />
-        <MoreFilters
-          fields={fields}
-          onChange={(key, value) => update({ [key]: value })}
-          onClear={() => update(Object.fromEntries(MORE_KEYS.map((k) => [k, ''])))}
-        />
+        <Select value={source || ALL_SOURCES} onValueChange={(v) => update({ batch_id: v === ALL_SOURCES ? '' : v })}>
+          <SelectTrigger aria-label="Source" className={cn('h-9 max-w-60 bg-surface data-[size=default]:h-9', source && 'border-foreground/40')}>
+            <Layers className="size-4 text-muted-foreground" aria-hidden />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_SOURCES}>All sources</SelectItem>
+            {sources.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {chips.length > 0 && (
@@ -161,27 +154,35 @@ export function FilterBar() {
   )
 }
 
+interface Option {
+  value: string
+  label: string
+}
+
 interface Chip {
   name: string
   label: string
   keys: string[] // URL params this chip clears
 }
 
-function activeChips(params: URLSearchParams, fields: FilterField[], from: string, to: string): Chip[] {
+function activeChips(params: URLSearchParams, sources: Option[], from: string, to: string): Chip[] {
   const chips: Chip[] = []
   const q = params.get('q')
   if (q) chips.push({ name: 'Search', label: `“${q}”`, keys: ['q'] })
   const agent = params.get('agent_type')
   if (agent) chips.push({ name: 'Agent', label: agent === 'ai' ? 'AI voice bot' : 'Human', keys: ['agent_type'] })
   if (from || to) chips.push({ name: 'Date', label: dateLabel(from, to), keys: ['date_from', 'date_to'] })
-  for (const f of fields) {
-    if (f.value) chips.push({ name: f.label, label: f.options.find((o) => o.value === f.value)?.label ?? f.value, keys: [f.key] })
-  }
+  const source = params.get('batch_id')
+  if (source) chips.push({ name: 'Source', label: sources.find((o) => o.value === source)?.label ?? `Batch #${source}`, keys: ['batch_id'] })
   const intent = params.get('intent_bucket')
   if (intent) chips.push({ name: 'Intent', label: INTENT_LABELS[intent] ?? intent, keys: ['intent_bucket'] })
-  // Any other filter key we don't label (keeps "Clear all" honest).
+  // Filters set elsewhere (KPI cards, an old shared link): still shown, so they can be removed.
+  const names: Record<string, string> = { campaign: 'Campaign', owner: 'Owner', status: 'Status', status_category: 'Status category' }
   for (const k of LEAD_FILTER_KEYS) {
-    if (params.get(k) && !chips.some((c) => c.keys.includes(k))) chips.push({ name: k, label: params.get(k)!, keys: [k] })
+    const v = params.get(k)
+    if (v && !chips.some((c) => c.keys.includes(k))) {
+      chips.push({ name: names[k] ?? k, label: k === 'status' ? (LEAD_STATUS_LABELS[v] ?? v) : v, keys: [k] })
+    }
   }
   return chips
 }
