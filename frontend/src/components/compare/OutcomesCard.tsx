@@ -7,12 +7,11 @@ import { ValueBar } from './ValueBar'
 
 /** F. Outcome distribution per side, then mood, objections, friction and escalation. */
 export function OutcomesCard({ data }: { data: CompareResult }) {
-  const { ai, human } = data.scores
   return (
     <CompareSection
       id="outcomes"
       title="Outcomes and customer mood"
-      caption={`Share of reviewed calls (${ai.n} AI, ${human.n} human) that ended in each outcome, and other signals from the reviews.`}
+      caption="How calls ended, and how customers felt."
     >
       {data.outcomes.length === 0 ? (
         <p className="text-muted-foreground">No reviewed calls with an outcome yet.</p>

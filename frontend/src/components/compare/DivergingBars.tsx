@@ -12,13 +12,12 @@ const MAX_SCORE = 5
 export function DivergingBars({ data }: { data: CompareResult }) {
   const [asTable, setAsTable] = useState(false)
   const rows = data.dimensions
-  const { ai, human } = data.scores
 
   return (
     <CompareSection
       id="scores"
       title="Review scores"
-      caption={`Average score per dimension, 1 (poor) to 5 (excellent). From ${ai.n} AI and ${human.n} human ${human.n === 1 ? 'call' : 'calls'} reviewed.`}
+      caption="Average per dimension, 1 (poor) to 5 (excellent)."
       action={
         <Button variant="outline" size="sm" aria-pressed={asTable} onClick={() => setAsTable((v) => !v)}>
           {asTable ? <ChartBarBig className="size-3.5" aria-hidden /> : <Table2 className="size-3.5" aria-hidden />}

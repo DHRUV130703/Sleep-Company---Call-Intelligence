@@ -13,7 +13,7 @@ export function EveryCall({ data }: { data: CompareResult }) {
     <CompareSection
       id="calls"
       title="Every call"
-      caption="Each call in this selection. Open one to see its review, key moments and transcript."
+      caption="Every call in this selection."
     >
       <div className="space-y-6">
         <CallGroup side="ai" calls={data.calls.ai} />

@@ -11,7 +11,7 @@ export function RootCauses({ data }: { data: CompareResult }) {
     <CompareSection
       id="root-causes"
       title="Root causes — repeated bot failures"
-      caption="Failure patterns found in the bot calls, counted in code. Owner and fix come from the bot playbook (config/bot_playbook.yaml). Open one to see every call where it happened."
+      caption="Repeated bot failures. Open one to see every call where it happened."
     >
       {data.scores.ai.n === 0 ? (
         <p className="text-muted-foreground">No analysed bot calls in this selection.</p>

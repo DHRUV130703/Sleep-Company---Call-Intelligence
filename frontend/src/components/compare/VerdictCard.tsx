@@ -1,7 +1,9 @@
-import { Info, TrendingDown, TrendingUp, Equal } from 'lucide-react'
+import { Equal, Info, Loader2, TrendingDown, TrendingUp, TriangleAlert } from 'lucide-react'
+import { Card, CardContent } from '@/components/ui/card'
+import { formatHoursMins } from '@/lib/format'
 import type { CompareResult, Side, Verdict } from '@/lib/types-compare'
 import { cn } from '@/lib/utils'
-import { CompareSection, SideLabel } from './CompareSection'
+import { SideLabel } from './CompareSection'
 
 const STATUS_STYLE: Record<Verdict['status'], string> = {
   behind: 'bg-negative-soft text-negative',
@@ -12,93 +14,111 @@ const STATUS_STYLE: Record<Verdict['status'], string> = {
 }
 const STATUS_ICON = { behind: TrendingDown, on_par: Equal, ahead: TrendingUp, no_benchmark: Info, no_data: Info }
 
-/** B. Is the bot behind, on par or ahead of humans? Status and points computed in code, headline by the AI. */
+/** The page's one-glance answer: is the bot behind, by how much, what to fix first — and what it's based on. */
 export function VerdictCard({ data }: { data: CompareResult }) {
   const v = data.improvement.verdict
   const s = data.synthesis
   const Icon = STATUS_ICON[v.status]
   return (
-    <CompareSection
-      id="verdict"
-      title="Verdict"
-      caption="Status, readiness and key points are computed from the call reviews. The headline and assessment are written by the AI."
-    >
-      <div className="grid gap-6 lg:grid-cols-[1fr_auto]">
-        <div className="min-w-0 space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-medium', STATUS_STYLE[v.status])}>
-              <Icon className="size-4" aria-hidden />
-              {v.label}
-            </span>
-            {v.readiness_pct !== null && (
-              <span className="num text-muted-foreground">
-                Bot reaches <span className="font-semibold text-foreground">{v.readiness_pct}%</span> of human quality
+    <Card className="py-5">
+      <CardContent className="space-y-5 px-5">
+        <div className="grid gap-6 lg:grid-cols-[1fr_auto]">
+          <div className="min-w-0 space-y-3">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <span className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-medium', STATUS_STYLE[v.status])}>
+                <Icon className="size-4" aria-hidden />
+                {v.label}
               </span>
+              {v.readiness_pct !== null && (
+                <span className="num text-muted-foreground">
+                  <span className="font-semibold text-foreground">{v.readiness_pct}%</span> of human quality
+                </span>
+              )}
+            </div>
+            {s ? (
+              <>
+                <p className="text-lg leading-snug font-medium text-balance md:text-xl">{s.verdict_headline}</p>
+                {s.verdict_detail && <p className="max-w-3xl text-muted-foreground">{s.verdict_detail}</p>}
+              </>
+            ) : (
+              v.points[0] && <p className="text-lg leading-snug font-medium text-balance">{v.points[0]}</p>
+            )}
+            {v.top_levers.length > 0 && (
+              <p>
+                <span className="text-muted-foreground">Fix first: </span>
+                <span className="font-medium">{v.top_levers.join(' · ')}</span>
+              </p>
             )}
           </div>
-
-          {s ? (
-            <div className="space-y-1.5">
-              <p className="text-lg leading-snug font-medium text-balance md:text-xl">{s.verdict_headline}</p>
-              {s.verdict_detail && <p className="max-w-3xl text-muted-foreground">{s.verdict_detail}</p>}
-            </div>
-          ) : (
-            <p className="flex items-start gap-2 text-muted-foreground">
-              <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
-              {data.synthesis_error ?? 'The written assessment is not available for this selection.'}
-            </p>
-          )}
-
-          {v.points.length > 0 && (
-            <ul className="list-disc space-y-1 pl-5">
-              {v.points.map((p) => (
-                <li key={p}>{p}</li>
-              ))}
-            </ul>
-          )}
-
-          {v.top_levers.length > 0 && (
-            <p>
-              <span className="font-medium">Fix first: </span>
-              {v.top_levers.map((l, i) => (
-                <span key={l}>
-                  {i > 0 && ', '}
-                  <a href="#plan" className="underline underline-offset-4 hover:text-foreground">
-                    {l}
-                  </a>
-                </span>
-              ))}
-            </p>
-          )}
+          <div className="grid h-fit grid-cols-2 gap-3">
+            <Score side="ai" data={data} />
+            <Score side="human" data={data} />
+          </div>
         </div>
 
-        <div className="grid h-fit grid-cols-2 gap-3 sm:gap-4">
-          <BigScore side="ai" data={data} />
-          <BigScore side="human" data={data} />
-        </div>
-      </div>
-    </CompareSection>
+        {v.points.length > 1 && (
+          <ul className="grid gap-x-8 gap-y-1.5 border-t pt-4 text-[13px] text-muted-foreground md:grid-cols-2">
+            {(s ? v.points : v.points.slice(1)).map((p) => (
+              <li key={p} className="flex gap-2">
+                <span aria-hidden>•</span>
+                <span>{p}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <BasedOn data={data} />
+      </CardContent>
+    </Card>
   )
 }
 
-function BigScore({ side, data }: { side: Side; data: CompareResult }) {
-  const s = data.scores[side]
-  const score = s.avg_review === null ? '—' : s.avg_review.toFixed(1)
+function Score({ side, data }: { side: Side; data: CompareResult }) {
+  const score = data.scores[side].avg_review
   const positive = data.improvement.verdict.positive_outcome_pct[side]
   return (
-    <div className={cn('rounded-lg px-4 py-3 sm:min-w-44', side === 'ai' ? 'bg-ai-soft' : 'bg-human-soft')}>
+    <div className={cn('rounded-lg px-4 py-3 sm:min-w-40', side === 'ai' ? 'bg-ai-soft' : 'bg-human-soft')}>
       <SideLabel side={side} className="text-xs" />
       <div className="mt-1 flex items-baseline gap-1">
-        <span className={cn('num text-[44px] leading-none font-semibold', side === 'ai' ? 'text-ai' : 'text-human')}>
-          {score}
+        <span className={cn('num text-4xl leading-none font-semibold', side === 'ai' ? 'text-ai' : 'text-human')}>
+          {score === null ? '—' : score.toFixed(1)}
         </span>
         <span className="text-muted-foreground">/ 5</span>
       </div>
-      <div className="num mt-1.5 text-xs text-muted-foreground">
-        {s.n} of {s.of} {s.of === 1 ? 'call' : 'calls'} reviewed
-      </div>
       {positive !== null && (
-        <div className="num mt-0.5 text-xs text-muted-foreground">{positive}% end with a concrete next step</div>
+        <div className="num mt-1.5 text-xs text-muted-foreground">{positive}% reach a next step</div>
+      )}
+    </div>
+  )
+}
+
+/** One quiet line with the numbers behind the verdict, plus warnings only when they matter. */
+function BasedOn({ data }: { data: CompareResult }) {
+  const { ai, human } = data.records
+  const failed = ai.failed + human.failed
+  const notConnected = ai.not_connected + human.not_connected
+  const inProgress = ai.in_progress + human.in_progress
+  const audio = ai.audio_seconds + human.audio_seconds
+  const parts = [
+    `${ai.analysed} of ${ai.uploaded} bot calls and ${human.analysed} of ${human.uploaded} human calls analysed`,
+    audio >= 60 ? `${formatHoursMins(audio)} of audio` : null,
+    failed ? `${failed} failed` : null,
+    notConnected ? `${notConnected} not connected` : null,
+  ].filter(Boolean)
+  return (
+    <div className="space-y-2 border-t pt-3 text-xs text-muted-foreground">
+      <p className="num">Based on {parts.join(' · ')}.</p>
+      {data.sample_warning && (
+        <p role="status" className="flex items-start gap-1.5 text-warning">
+          <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
+          {data.sample_warning}
+        </p>
+      )}
+      {inProgress > 0 && (
+        <p role="status" className="flex items-center gap-1.5">
+          <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden />
+          {inProgress} {inProgress === 1 ? 'call is' : 'calls are'} still processing — re-run when done.
+        </p>
       )}
     </div>
   )

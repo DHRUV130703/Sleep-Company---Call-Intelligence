@@ -10,7 +10,7 @@ export function DifferencesTable({ data }: { data: CompareResult }) {
     <CompareSection
       id="differences"
       title="Where they differ"
-      caption="Written by the AI from the calls. Every quote below was checked against the transcript — click one to hear it."
+      caption="Written by the AI. Click a quote to hear it."
     >
       {!data.synthesis ? (
         <p className="text-muted-foreground">{data.synthesis_error ?? 'Not available for this selection.'}</p>

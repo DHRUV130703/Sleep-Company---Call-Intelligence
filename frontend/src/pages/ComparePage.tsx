@@ -14,7 +14,6 @@ import { MeasuredTable } from '@/components/compare/MeasuredTable'
 import { MissedObjections } from '@/components/compare/MissedObjections'
 import { OutcomesCard } from '@/components/compare/OutcomesCard'
 import { OutdatedReviewsNotice } from '@/components/compare/OutdatedReviewsNotice'
-import { RecordsStrip } from '@/components/compare/RecordsStrip'
 import { RootCauses } from '@/components/compare/RootCauses'
 import { ScopePicker } from '@/components/compare/ScopePicker'
 import { VerdictCard } from '@/components/compare/VerdictCard'
@@ -22,30 +21,35 @@ import { EmptyState } from '@/components/EmptyState'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { compareApi, scopeFromParams, scopeToParams } from '@/lib/api-compare'
 import { formatDateTime } from '@/lib/format'
 import type { CompareResult, CompareScope } from '@/lib/types-compare'
 import { cn } from '@/lib/utils'
 
-/** Report sections in page order: verdict and the bot improvement plan first, then the detail. Ids match each section's anchor. */
-const SECTIONS = [
-  { id: 'records', label: 'Records' },
-  { id: 'verdict', label: 'Verdict' },
-  { id: 'plan', label: 'Improvement plan' },
-  { id: 'root-causes', label: 'Root causes' },
-  { id: 'objections', label: 'Missed objections' },
-  { id: 'fix', label: 'Recommended changes' },
-  { id: 'call-rca', label: 'Call-by-call RCA' },
-  { id: 'differences', label: 'Where they differ' },
-  { id: 'scores', label: 'Review scores' },
-  { id: 'measured', label: 'Measured' },
-  { id: 'outcomes', label: 'Outcomes and mood' },
-  { id: 'calls', label: 'Every call' },
-]
+/** The three views under the summary. Kept in the URL (?view=…) so a view can be linked. */
+const VIEWS = [
+  { id: 'fix', label: 'What to fix' },
+  { id: 'calls', label: 'Calls' },
+  { id: 'side-by-side', label: 'Side by side' },
+] as const
+type View = (typeof VIEWS)[number]['id']
 
 export default function ComparePage() {
   const [params, setParams] = useSearchParams()
   const scope = useMemo(() => scopeFromParams(params), [params])
+  const view: View = VIEWS.some((v) => v.id === params.get('view')) ? (params.get('view') as View) : 'fix'
+  const setView = (v: View) => {
+    const next = new URLSearchParams(params)
+    if (v === 'fix') next.delete('view')
+    else next.set('view', v)
+    setParams(next, { replace: true })
+  }
+  const setScope = (s: CompareScope) => {
+    const next = scopeToParams(s)
+    if (params.get('view')) next.set('view', params.get('view')!)
+    setParams(next, { replace: true })
+  }
   const qc = useQueryClient()
 
   const compare = useQuery({
@@ -71,11 +75,7 @@ export default function ComparePage() {
     <>
       <PageHeader
         title="AI voice bot vs human agents"
-        description={
-          data
-            ? `How good the bot is against your team, what to fix first, and the calls that prove it. Built ${formatDateTime(data.generated_at)}.`
-            : 'How good the bot is against your team, what to fix first, and the calls that prove it.'
-        }
+        description={data ? `Updated ${formatDateTime(data.generated_at)}` : undefined}
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -84,14 +84,14 @@ export default function ComparePage() {
               disabled={compare.isPending || rerun.isPending}
             >
               <RefreshCw className={cn('size-4', rerun.isPending && 'animate-spin motion-reduce:animate-none')} aria-hidden />
-              Re-run comparison
+              Re-run
             </Button>
             {hasCalls && <DownloadMenu scope={scope} />}
           </div>
         }
       />
 
-      <ScopePicker scope={scope} onChange={(s) => setParams(scopeToParams(s), { replace: true })} />
+      <ScopePicker scope={scope} onChange={setScope} />
 
       <div aria-live="polite" className="empty:hidden">
         {rerun.isPending && (
@@ -109,48 +109,43 @@ export default function ComparePage() {
           </Button>
         </div>
       )}
-      {data && !hasCalls && <NothingToCompare filtered={params.toString() !== ''} onClear={() => setParams({})} />}
-      {data && hasCalls && <Report data={data} scope={scope} />}
+      {data && !hasCalls && <NothingToCompare filtered={scopeToParams(scope).toString() !== ''} onClear={() => setParams({})} />}
+      {data && hasCalls && <Report data={data} scope={scope} view={view} onView={setView} />}
     </>
   )
 }
 
-function Report({ data, scope }: { data: CompareResult; scope: CompareScope }) {
+function Report({ data, scope, view, onView }: { data: CompareResult; scope: CompareScope; view: View; onView: (v: View) => void }) {
   return (
-    <div className="xl:grid xl:grid-cols-[minmax(0,1fr)_11rem] xl:gap-8">
-      <div className="min-w-0 space-y-6">
-        <OneSideNotice data={data} />
-        <OutdatedReviewsNotice data={data} scope={scope} />
-        <RecordsStrip data={data} />
-        <VerdictCard data={data} />
-        <ImprovementPlan data={data} />
-        <RootCauses data={data} />
-        <MissedObjections data={data} />
-        <FixTheBot data={data} />
-        <CallRcaList data={data} />
-        <DifferencesTable data={data} />
-        <DivergingBars data={data} />
-        <MeasuredTable data={data} />
-        <OutcomesCard data={data} />
-        <EveryCall data={data} />
-      </div>
-      <nav aria-label="Sections of this report" className="hidden xl:block">
-        <div className="sticky top-24">
-          <div className="mb-2 text-xs font-medium text-muted-foreground">On this page</div>
-          <ol className="space-y-0.5 border-l">
-            {SECTIONS.map((s) => (
-              <li key={s.id}>
-                <a
-                  href={`#${s.id}`}
-                  className="-ml-px block border-l border-transparent py-1 pl-3 text-[13px] text-muted-foreground hover:border-foreground hover:text-foreground"
-                >
-                  {s.label}
-                </a>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </nav>
+    <div className="space-y-6">
+      <OneSideNotice data={data} />
+      <OutdatedReviewsNotice data={data} scope={scope} />
+      <VerdictCard data={data} />
+      <Tabs value={view} onValueChange={(v) => onView(v as View)} className="gap-5">
+        <TabsList variant="line" className="w-full justify-start border-b">
+          {VIEWS.map((v) => (
+            <TabsTrigger key={v.id} value={v.id} className="flex-none px-3 text-[14px]">
+              {v.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        <TabsContent value="fix" className="space-y-6">
+          <ImprovementPlan data={data} />
+          <RootCauses data={data} />
+          <MissedObjections data={data} />
+          <FixTheBot data={data} />
+        </TabsContent>
+        <TabsContent value="calls" className="space-y-6">
+          <CallRcaList data={data} />
+          <EveryCall data={data} />
+        </TabsContent>
+        <TabsContent value="side-by-side" className="space-y-6">
+          <DifferencesTable data={data} />
+          <DivergingBars data={data} />
+          <MeasuredTable data={data} />
+          <OutcomesCard data={data} />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

@@ -69,3 +69,31 @@ def test_finish_job_records_errors(session):
     finish_job(session, job.id, error="boom")
     session.refresh(job)
     assert job.status == JobStatus.failed and job.last_error == "boom"
+
+
+def test_queue_check_sees_only_jobs_that_are_due(session):
+    from app.worker import has_queued_jobs
+
+    assert has_queued_jobs(session) is False
+    call_id = _make_call(session)
+    session.add(Job(call_id=call_id, stage=CallStage.analysing, run_after=utcnow() + timedelta(minutes=5)))
+    session.commit()
+    assert has_queued_jobs(session) is False  # a retry waiting for later doesn't wake anyone
+    session.add(Job(call_id=call_id, stage=CallStage.preparing))
+    session.commit()
+    assert has_queued_jobs(session) is True
+
+
+async def test_idle_slots_sleep_until_nudged():
+    import asyncio
+    import time
+
+    from app.worker import Wakeup
+
+    wakeup = Wakeup()
+    started = time.monotonic()
+    waiter = asyncio.create_task(wakeup.wait(timeout=30))
+    await asyncio.sleep(0.05)
+    await wakeup.nudge()
+    await waiter
+    assert time.monotonic() - started < 1  # woke on the nudge, not after the 30 s timeout

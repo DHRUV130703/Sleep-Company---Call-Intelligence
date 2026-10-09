@@ -48,7 +48,7 @@ export function CallRcaList({ data }: { data: CompareResult }) {
     <CompareSection
       id="call-rca"
       title="Call-by-call RCA (bot calls)"
-      caption="Every analysed bot call, lowest review score first. Open a call to see what went wrong, when, and what the bot should have said. Quotes open the call at that moment."
+      caption="Bot calls, worst first. Open one to see what went wrong and when."
     >
       <div role="group" aria-label="Filter issues" className="mb-3 flex flex-wrap gap-1.5">
         {KINDS.map((k) => (

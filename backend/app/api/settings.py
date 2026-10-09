@@ -21,7 +21,7 @@ from app.worker import last_heartbeat
 
 router = APIRouter(tags=["settings"])
 
-WORKER_ALIVE_WITHIN_S = 20
+WORKER_ALIVE_WITHIN_S = 60  # the worker writes a heartbeat every 15 s
 
 
 # ---------------------------------------------------------------------------

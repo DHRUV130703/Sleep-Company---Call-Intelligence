@@ -10,7 +10,7 @@ export function MissedObjections({ data }: { data: CompareResult }) {
     <CompareSection
       id="objections"
       title="Objections the bot missed"
-      caption="Customer objections the bot did not handle well, grouped by type, with what it should have said. Where a human handled the same type well, their example is shown."
+      caption="What customers pushed back on, and what the bot should have said."
     >
       {rows.length === 0 ? (
         <p className="text-muted-foreground">The bot handled every objection in this selection well.</p>

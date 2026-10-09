@@ -8,7 +8,7 @@ export function MeasuredTable({ data }: { data: CompareResult }) {
     <CompareSection
       id="measured"
       title="Measured from the transcripts"
-      caption="Counted directly from who said what, not judged by the model. Averages per call."
+      caption="Counted from the transcripts. Averages per call."
     >
       <div className="overflow-x-auto">
         <table className="w-full min-w-[22rem] text-left">

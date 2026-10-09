@@ -23,7 +23,7 @@ export function ImprovementPlan({ data }: { data: CompareResult }) {
     <CompareSection
       id="plan"
       title="Improvement plan for the bot"
-      caption="Each review parameter, most important first. Gap = how far the bot is behind the human average; weak = bot calls scoring 1–2. Open a row to see the bot's weakest moments next to the best human ones."
+      caption="Most important first. Open a row to compare the bot's weakest moments with the best human ones."
     >
       {data.scores.ai.n === 0 ? (
         <p className="text-muted-foreground">No analysed bot calls in this selection.</p>

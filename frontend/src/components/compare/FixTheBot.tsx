@@ -21,7 +21,7 @@ export function FixTheBot({ data }: { data: CompareResult }) {
     <CompareSection
       id="fix"
       title="Recommended changes to the bot"
-      caption="Written by the AI from the numbers and calls above, most impactful first. Example calls are checked to be real bot calls."
+      caption="Written by the AI from these calls, most impactful first."
     >
       <div className="space-y-6">
         {s &&
