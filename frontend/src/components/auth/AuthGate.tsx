@@ -35,10 +35,9 @@ function SignIn() {
   const [password, setPassword] = useState('')
   const login = useMutation({
     mutationFn: () => authApi.login(email, password),
-    onSuccess: () => {
-      qc.clear() // drop anything fetched while signed out
-      qc.invalidateQueries({ queryKey: ['auth'] })
-    },
+    // Reset every query (not clear: clearing would also drop the sign-in check this screen waits on),
+    // so the sign-in status is fetched again and pages load fresh data as the signed-in person.
+    onSuccess: () => qc.resetQueries(),
   })
   const submit = (e: FormEvent) => {
     e.preventDefault()

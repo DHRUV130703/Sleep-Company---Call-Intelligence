@@ -10,10 +10,7 @@ export function SignedInUser() {
   const status = useQuery({ queryKey: ['auth'], queryFn: authApi.status, staleTime: Infinity })
   const signOut = useMutation({
     mutationFn: authApi.logout,
-    onSettled: () => {
-      qc.clear()
-      qc.invalidateQueries({ queryKey: ['auth'] })
-    },
+    onSettled: () => qc.resetQueries(), // re-checks sign-in (→ sign-in screen) and forgets loaded data
   })
   const email = status.data?.email
   if (!email) return null
