@@ -18,12 +18,10 @@ from app.providers.assemblyai import AssemblyAITranscriber
 from app.providers.base import LLM, ProviderError, Transcriber
 from app.providers.claude_cli import ClaudeCLI
 from app.providers.fake import FakeLLM, FakeTranscriber
-from app.providers.faster_whisper_local import FasterWhisperTranscriber
 from app.providers.gemini import GeminiClient, GeminiTranscriber
 from app.providers.groq import GroqClient
 from app.providers.ollama import OllamaClient
 from app.providers.openai_transcriber import OpenAITranscriber
-from app.providers.whisper_local import LocalWhisperTranscriber
 
 log = logging.getLogger("providers")
 SKIP_AFTER_NO_CREDITS_S = 600
@@ -48,8 +46,12 @@ def _build_transcriber(name: str) -> Transcriber:
         models = [m.strip() for m in s.assemblyai_models.split(",") if m.strip()]
         return AssemblyAITranscriber(s.assemblyai_api_key, models)
     if name == "faster_whisper":
+        from app.providers.faster_whisper_local import FasterWhisperTranscriber  # local-only libraries
+
         return FasterWhisperTranscriber(s.whisper_model, s.whisper_compute_type)
     if name == "mlx_whisper":
+        from app.providers.whisper_local import LocalWhisperTranscriber  # local-only libraries
+
         return LocalWhisperTranscriber(s.mlx_whisper_model)
     if name == "gemini":
         return GeminiTranscriber(_gemini_client(), s.gemini_transcribe_model)

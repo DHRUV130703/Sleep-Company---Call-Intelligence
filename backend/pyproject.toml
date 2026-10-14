@@ -16,8 +16,6 @@ dependencies = [
     "rapidfuzz>=3.9",
     "python-multipart>=0.0.9",
     "xlrd>=2.0",
-    "mlx-whisper>=0.4.3",
-    "faster-whisper>=1.2.1",
     "python-docx>=1.2.0",
     "sqlalchemy-cockroachdb>=2.0",
     "psycopg[binary]>=3.2",
@@ -27,6 +25,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Speech-to-text on this computer instead of AssemblyAI (TRANSCRIBER=faster_whisper / mlx_whisper):
+#   uv sync --extra dev --extra local-whisper      (large: ~800 MB; not used in the cloud)
+local-whisper = [
+    "mlx-whisper>=0.4.3",
+    "faster-whisper>=1.2.1",
+]
 dev = [
     "pytest>=8",
     "pytest-asyncio>=0.24",

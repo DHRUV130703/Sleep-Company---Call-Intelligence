@@ -10,7 +10,7 @@ SHELL := /bin/bash
 BACKEND := backend
 VENV := $(BACKEND)/.venv/bin
 
-.PHONY: setup migrate migration move-to-cloud export-sqlite dev api worker web test lint format
+.PHONY: setup migrate migration move-to-cloud export-sqlite requirements dev api worker web test lint format
 
 setup:
 	@command -v uv >/dev/null || { echo "✗ uv is required: https://docs.astral.sh/uv/  (macOS: brew install uv)"; exit 1; }
@@ -32,6 +32,10 @@ move-to-cloud: migrate
 # Report data (calls, scores, transcripts, AI vs Human plan) → exports/limezip-reports-<date>.db for sqlite3.
 export-sqlite:
 	cd $(BACKEND) && .venv/bin/python -m app.export_sqlite
+
+# After changing backend dependencies: refresh requirements.txt, which Vercel installs (no local-whisper extra).
+requirements:
+	cd $(BACKEND) && uv lock && uv export --frozen --no-dev --no-hashes --no-emit-project --no-header -o ../requirements.txt
 
 # After changing backend/app/models.py:  make migration name="add notes pinned flag"
 migration:

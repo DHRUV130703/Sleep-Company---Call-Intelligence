@@ -2,6 +2,9 @@
 
 import type { ApiErrorBody, HealthResponse, SettingsResponse, StatsResponse } from './types'
 
+/** Fired when the server says the session has ended; the sign-in screen (AuthGate) listens for it. */
+export const SIGNED_OUT_EVENT = 'limezip:signed-out'
+
 /** Error thrown for any non-2xx response. `message` is safe to show to users. */
 export class ApiError extends Error {
   readonly code: string
@@ -27,7 +30,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
         : { 'Content-Type': 'application/json', ...init?.headers },
     })
   } catch {
-    throw new ApiError(0, 'NETWORK_ERROR', "Can't reach the LimeZip server. Is `make dev` running?")
+    throw new ApiError(0, 'NETWORK_ERROR', "Can't reach the LimeZip server. Check your connection and try again.")
   }
 
   if (!res.ok) {
@@ -38,6 +41,9 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
       /* non-JSON error (e.g. proxy error page) */
     }
     const err = body.error
+    if (res.status === 401 && err?.code === 'UNAUTHORIZED' && path !== '/auth/login') {
+      window.dispatchEvent(new Event(SIGNED_OUT_EVENT)) // the session ended: show the sign-in screen
+    }
     throw new ApiError(
       res.status,
       err?.code ?? 'HTTP_ERROR',

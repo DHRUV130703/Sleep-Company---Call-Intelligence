@@ -1,6 +1,7 @@
 """Health, overall stats and settings endpoints."""
 
 import json
+import os
 import shutil
 import subprocess
 import time
@@ -231,8 +232,8 @@ def health() -> HealthResponse:
     checks = [
         _check_database(),
         _check_worker(),
-        _check_binary("ffmpeg"),
-        _check_binary("ffprobe"),
+        # On Vercel only the website and API run; ffmpeg is needed on the worker machine, not here.
+        *([] if os.environ.get("VERCEL") else [_check_binary("ffmpeg"), _check_binary("ffprobe")]),
         _check_provider("transcriber", s.transcriber, s),
         _check_provider("analyzer", s.analyzer, s),
         _check_config(),

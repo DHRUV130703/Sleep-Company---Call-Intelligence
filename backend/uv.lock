@@ -534,10 +534,8 @@ dependencies = [
     { name = "alembic" },
     { name = "certifi" },
     { name = "fastapi" },
-    { name = "faster-whisper" },
     { name = "fpdf2" },
     { name = "httpx" },
-    { name = "mlx-whisper" },
     { name = "openpyxl" },
     { name = "phonenumbers" },
     { name = "psycopg", extra = ["binary"] },
@@ -561,16 +559,20 @@ dev = [
     { name = "ruff" },
     { name = "types-pyyaml" },
 ]
+local-whisper = [
+    { name = "faster-whisper" },
+    { name = "mlx-whisper" },
+]
 
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.13" },
     { name = "certifi", specifier = ">=2026.7.22" },
     { name = "fastapi", specifier = ">=0.115" },
-    { name = "faster-whisper", specifier = ">=1.2.1" },
+    { name = "faster-whisper", marker = "extra == 'local-whisper'", specifier = ">=1.2.1" },
     { name = "fpdf2", specifier = ">=2.8" },
     { name = "httpx", specifier = ">=0.27" },
-    { name = "mlx-whisper", specifier = ">=0.4.3" },
+    { name = "mlx-whisper", marker = "extra == 'local-whisper'", specifier = ">=0.4.3" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.11" },
     { name = "openpyxl", specifier = ">=3.1" },
     { name = "phonenumbers", specifier = ">=8.13" },
@@ -590,7 +592,7 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
     { name = "xlrd", specifier = ">=2.0" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["local-whisper", "dev"]
 
 [[package]]
 name = "llvmlite"

@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app import __version__
+from app import __version__, auth
 from app.api import batches, calls, compare, leads, reports, uploads
 from app.api import settings as settings_api
 from app.config import get_settings
@@ -28,9 +28,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(auth.PasswordGate)  # no-op unless APP_PASSWORD is set
 install_error_handlers(app)
 
 for router in (
+    auth.router,
     settings_api.router,
     uploads.router,
     batches.router,

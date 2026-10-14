@@ -40,7 +40,7 @@ export function TopBar({ title, onToggleSidebar }: Props) {
 
 /** Shows a warning button when any health check fails (e.g. worker stopped). Links to Settings. */
 function HealthAlert() {
-  const health = useQuery({ queryKey: ['health'], queryFn: api.health, refetchInterval: 15_000 })
+  const health = useQuery({ queryKey: ['health'], queryFn: api.health, refetchInterval: 60_000 })
   const failing = health.data?.checks.filter((c) => c.state === 'fail') ?? []
   const unreachable = health.isError
 

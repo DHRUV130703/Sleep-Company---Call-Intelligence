@@ -1,127 +1,129 @@
-aiohappyeyeballs==2.6.1
-aiohttp==3.13.5
-aiosignal==1.4.0
-annotated-types==0.7.0
-anthropic==0.97.0
-anyio==4.13.0
-attrs==26.1.0
-beautifulsoup4==4.14.3
-blinker==1.9.0
-certifi==2026.2.25
-cffi==2.0.0
-charset-normalizer==3.4.7
-claude-agent-sdk==0.1.56
-click==8.3.2
-croniter==6.2.4
-cryptography==46.0.7
-dataclasses-json==0.6.7
-distro==1.9.0
-docstring_parser==0.18.0
-et_xmlfile==2.0.0
-filelock==3.29.0
-filetype==1.2.0
-Flask==3.1.3
-flask-cors==6.0.2
-frozenlist==1.8.0
-fsspec==2026.4.0
-google==3.0.0
-google-auth==2.49.2
-google-genai==1.73.1
-groq==1.7.0
-grpcio==1.80.0
+alembic==1.20.0
+    # via limezip-backend
+annotated-doc==0.0.5
+    # via fastapi
+annotated-types==0.8.0
+    # via pydantic
+anyio==4.15.1
+    # via
+    #   httpx
+    #   starlette
+    #   watchfiles
+certifi==2026.7.22
+    # via
+    #   httpcore
+    #   httpx
+    #   limezip-backend
+click==8.5.0
+    # via uvicorn
+defusedxml==0.7.1
+    # via fpdf2
+et-xmlfile==2.0.0
+    # via openpyxl
+fastapi==0.142.2
+    # via limezip-backend
+fonttools==4.66.1
+    # via fpdf2
+fpdf2==2.8.9
+    # via limezip-backend
+greenlet==3.5.6 ; platform_machine == 'AMD64' or platform_machine == 'WIN32' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'ppc64le' or platform_machine == 'win32' or platform_machine == 'x86_64'
+    # via sqlalchemy
 h11==0.16.0
-h2==4.3.0
-hpack==4.1.0
+    # via
+    #   httpcore
+    #   uvicorn
 httpcore==1.0.9
+    # via httpx
+httptools==0.8.0
+    # via uvicorn
 httpx==0.28.1
-httpx-sse==0.4.3
-hyperframe==6.1.0
-idna==3.11
-itsdangerous==2.2.0
-Jinja2==3.1.6
-jiter==0.13.0
-jsonpatch==1.33
-jsonpointer==3.1.1
-jsonschema==4.26.0
-jsonschema-specifications==2025.9.1
-langchain==1.2.15
-langchain-anthropic==1.4.1
-langchain-classic==1.0.4
-langchain-community==0.4.1
-langchain-core==1.3.2
-langchain-google-genai==4.2.3
-langchain-openai==1.2.1
-langchain-protocol==0.0.12
-langchain-qdrant==1.1.0
-langchain-text-splitters==1.1.2
-langgraph==1.1.6
-langgraph-checkpoint==4.0.1
-langgraph-prebuilt==1.0.9
-langgraph-sdk==0.3.13
-langsmith==0.7.27
-llvmlite==0.47.0
-lxml==6.1.1
-MarkupSafe==3.0.3
-marshmallow==3.26.2
-mcp==1.27.0
-more-itertools==11.1.0
-mpmath==1.3.0
-multidict==6.7.1
-mypy_extensions==1.1.0
-networkx==3.6.1
-numba==0.65.1
-numpy==2.4.4
-openai==2.30.0
-openai-whisper==20250625
+    # via limezip-backend
+idna==3.20
+    # via
+    #   anyio
+    #   httpx
+lxml==6.1.3
+    # via python-docx
+mako==1.4.3
+    # via alembic
+markupsafe==3.0.4
+    # via mako
 openpyxl==3.1.5
-orjson==3.11.8
-ormsgpack==1.12.2
-packaging==26.0
-portalocker==3.2.0
-propcache==0.4.1
-protobuf==7.35.0
-pyasn1==0.6.3
-pyasn1_modules==0.4.2
-pycparser==3.0
-pydantic==2.12.5
-pydantic-settings==2.13.1
-pydantic_core==2.41.5
-PyJWT==2.12.1
-pypdf==6.12.2
-python-dateutil==2.9.0.post0
+    # via limezip-backend
+opentelemetry-api==1.45.1
+    # via fastapi
+phonenumbers==9.0.40
+    # via limezip-backend
+pillow==12.3.0
+    # via fpdf2
+psycopg==3.3.6
+    # via limezip-backend
+psycopg-binary==3.3.6 ; implementation_name != 'pypy'
+    # via psycopg
+pydantic==2.13.5
+    # via
+    #   fastapi
+    #   pydantic-settings
+    #   sqlmodel
+pydantic-core==2.46.5
+    # via pydantic
+pydantic-settings==2.15.0
+    # via limezip-backend
 python-docx==1.2.0
-python-dotenv==1.2.2
-python-multipart==0.0.24
-PyYAML==6.0.3
-qdrant-client==1.18.0
-redis==8.1.0
-referencing==0.37.0
-regex==2026.4.4
-requests==2.33.1
-requests-toolbelt==1.0.0
-rpds-py==0.30.0
-rq==2.12.0
-setuptools==81.0.0
-six==1.17.0
-sniffio==1.3.1
-soupsieve==2.8.3
-SQLAlchemy==2.0.49
-sse-starlette==3.3.4
-starlette==1.0.0
-sympy==1.14.0
-tenacity==9.1.4
-tiktoken==0.12.0
-torch==2.12.0
-tqdm==4.67.3
-typing-inspect==0.9.0
-typing-inspection==0.4.2
-typing_extensions==4.15.0
-urllib3==2.6.3
-uuid_utils==0.14.1
-uvicorn==0.44.0
-websockets==16.0
-Werkzeug==3.1.8
-wikipedia==1.4.0
-xxhash==3.6.0
-yarl==1.23.0
-zstandard==0.25.0
+    # via limezip-backend
+python-dotenv==1.2.4
+    # via
+    #   pydantic-settings
+    #   uvicorn
+python-multipart==0.0.32
+    # via limezip-backend
+pyyaml==6.0.3
+    # via
+    #   limezip-backend
+    #   uvicorn
+rapidfuzz==3.14.6
+    # via limezip-backend
+sqlalchemy==2.0.54
+    # via
+    #   alembic
+    #   sqlalchemy-cockroachdb
+    #   sqlmodel
+sqlalchemy-cockroachdb==2.0.4
+    # via limezip-backend
+sqlmodel==0.0.48
+    # via limezip-backend
+starlette==1.7.0
+    # via fastapi
+typing-extensions==4.16.0
+    # via
+    #   alembic
+    #   anyio
+    #   fastapi
+    #   opentelemetry-api
+    #   psycopg
+    #   pydantic
+    #   pydantic-core
+    #   python-docx
+    #   sqlalchemy
+    #   sqlmodel
+    #   starlette
+    #   typing-inspection
+typing-inspection==0.4.4
+    # via
+    #   fastapi
+    #   pydantic
+    #   pydantic-settings
+tzdata==2026.5 ; sys_platform == 'win32'
+    # via psycopg
+uharfbuzz==0.56.3
+    # via limezip-backend
+uvicorn==0.54.0
+    # via limezip-backend
+uvloop==0.23.0 ; platform_python_implementation != 'PyPy' and sys_platform != 'cygwin' and sys_platform != 'win32'
+    # via uvicorn
+watchfiles==1.3.0
+    # via uvicorn
+websockets==17.2
+    # via uvicorn
+xlrd==2.0.2
+    # via limezip-backend

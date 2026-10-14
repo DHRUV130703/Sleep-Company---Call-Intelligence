@@ -20,7 +20,9 @@ from app.config import get_settings
 from app.errors import AppError, ErrorCode
 from app.models import Upload, UploadStatus
 
-CHUNK_SIZE = 8 * 1024 * 1024  # 8 MB — a whole number of storage parts, so chunks join without copying
+CHUNK_SIZE = (
+    4 * 1024 * 1024
+)  # 4 MB: fits Vercel's 4.5 MB request limit, and is a whole number of storage parts
 
 
 def chunk_key(upload_id: str, index: int) -> str:

@@ -1,0 +1,18 @@
+# Never upload secrets or local data to Vercel.
+.env
+.env.*
+!.env.example
+data/
+exports/
+samples/
+backend/.venv/
+backend/tests/
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.ruff_cache/
+frontend/node_modules/
+frontend/dist/
+**/__pycache__/
+*.pyc
+.DS_Store
+.claude/
