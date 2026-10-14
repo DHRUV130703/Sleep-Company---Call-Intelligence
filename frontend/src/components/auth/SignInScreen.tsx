@@ -94,14 +94,14 @@ function SignInForm() {
   }
 
   return (
-    <form onSubmit={submit} className="w-full max-w-[400px] space-y-7" noValidate>
+    <form onSubmit={submit} className="w-full max-w-[400px] space-y-8" noValidate>
       <Logo className="lg:hidden" />
       <div className="space-y-1.5">
         <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
         <p className="text-muted-foreground">Use your Sleep Company work account.</p>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-6">
         <Field id="signin-email" label="Email address" icon={<Mail className="size-4" aria-hidden />}>
           <input
             id="signin-email"
@@ -125,7 +125,7 @@ function SignInForm() {
               onClick={() => setShowPassword((s) => !s)}
               aria-label={showPassword ? 'Hide password' : 'Show password'}
               aria-pressed={showPassword}
-              className="grid size-8 place-items-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+              className="grid size-9 place-items-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
             >
               {showPassword ? <EyeOff className="size-4" aria-hidden /> : <Eye className="size-4" aria-hidden />}
             </button>
@@ -138,7 +138,7 @@ function SignInForm() {
             placeholder="Enter your password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className={cn(INPUT, 'pr-11')}
+            className={cn(INPUT, 'pr-12')}
           />
         </Field>
       </div>
@@ -150,7 +150,7 @@ function SignInForm() {
             {login.error.message}
           </p>
         )}
-        <Button type="submit" className="h-11 w-full text-[15px]" disabled={!email || !password || login.isPending}>
+        <Button type="submit" className="h-12 w-full text-[15px]" disabled={!email || !password || login.isPending}>
           {login.isPending && <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />}
           {login.isPending ? 'Signing in…' : 'Sign in'}
         </Button>
@@ -162,18 +162,18 @@ function SignInForm() {
 }
 
 const INPUT =
-  'h-11 w-full rounded-lg border bg-surface pr-3 pl-10 text-[15px] outline-none transition-colors placeholder:text-muted-foreground/80 hover:border-foreground/25 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40'
+  'h-12 w-full rounded-lg border bg-surface pr-4 pl-11 text-[15px] outline-none transition-colors placeholder:text-muted-foreground/80 hover:border-foreground/25 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40'
 
 function Field({ id, label, icon, action, children }: { id: string; label: string; icon: ReactNode; action?: ReactNode; children: ReactNode }) {
   return (
-    <div className="space-y-2">
-      <label htmlFor={id} className="text-sm font-medium">
+    <div className="space-y-2.5">
+      <label htmlFor={id} className="block text-sm font-medium">
         {label}
       </label>
       <div className="relative">
-        <span className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-muted-foreground">{icon}</span>
+        <span className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-muted-foreground">{icon}</span>
         {children}
-        {action && <span className="absolute top-1/2 right-1.5 -translate-y-1/2">{action}</span>}
+        {action && <span className="absolute top-1/2 right-2 -translate-y-1/2">{action}</span>}
       </div>
     </div>
   )
