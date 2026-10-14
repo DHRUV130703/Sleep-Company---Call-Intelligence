@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Monitor, Moon, PanelLeft, Sun, TriangleAlert } from 'lucide-react'
 import { Link } from 'react-router'
+import { SignedInUser } from '@/components/auth/SignedInUser'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { api } from '@/lib/api'
@@ -25,6 +26,7 @@ export function TopBar({ title, onToggleSidebar }: Props) {
 
       <div className="ml-auto flex items-center gap-2">
         <HealthAlert />
+        <SignedInUser />
         <Tooltip>
           <TooltipTrigger asChild>
             <Button variant="outline" size="icon" onClick={cycle} aria-label={`Theme: ${pref}. Click to change.`}>

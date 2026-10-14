@@ -85,7 +85,9 @@ class Settings(BaseSettings):
     # Base of the public report links stored with each saved report. Empty = frontend_origin (works on this
     # computer only); set it to the app's public address once it is deployed.
     public_base_url: str = ""
-    # Signs the session cookie for APP_PASSCODE (the team password); changing either signs everyone out.
+    # Sign-in accounts as JSON {"email": "password", …} (empty = no login, for local use), and the secret
+    # that signs the session cookie. See app/auth.py.
+    app_users: str = ""
     app_secret: str = ""
 
     @field_validator("data_dir")

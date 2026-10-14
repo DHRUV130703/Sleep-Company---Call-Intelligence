@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { authApi, SIGNED_OUT_EVENT } from '@/lib/api-auth'
 import { PRODUCT_AUTHOR, WORKSPACE_NAME, WORKSPACE_SUBTITLE } from '@/lib/constants'
 
-/** Shows the sign-in screen when the server needs the team password; otherwise renders the app. */
+/** Shows the sign-in screen when the server needs a signed-in person; otherwise renders the app. */
 export function AuthGate({ children }: { children: ReactNode }) {
   const qc = useQueryClient()
   const status = useQuery({ queryKey: ['auth'], queryFn: authApi.status, staleTime: Infinity, retry: 1 })
@@ -31,9 +31,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
 function SignIn() {
   const qc = useQueryClient()
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const login = useMutation({
-    mutationFn: () => authApi.login(password),
+    mutationFn: () => authApi.login(email, password),
     onSuccess: () => {
       qc.clear() // drop anything fetched while signed out
       qc.invalidateQueries({ queryKey: ['auth'] })
@@ -41,7 +42,7 @@ function SignIn() {
   })
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    if (password) login.mutate()
+    if (email && password) login.mutate()
   }
 
   return (
@@ -56,24 +57,40 @@ function SignIn() {
             <div className="text-sm text-muted-foreground">{WORKSPACE_SUBTITLE}</div>
           </div>
         </div>
-        <div className="space-y-2">
-          <label htmlFor="team-password" className="text-sm font-medium">
-            Team password
-          </label>
-          <Input
-            id="team-password"
-            type="password"
-            autoComplete="current-password"
-            autoFocus
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="h-10"
-          />
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label htmlFor="signin-email" className="text-sm font-medium">
+              Work email
+            </label>
+            <Input
+              id="signin-email"
+              type="email"
+              autoComplete="username"
+              autoFocus
+              placeholder="name@thesleepcompany.in"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="h-10"
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="signin-password" className="text-sm font-medium">
+              Password
+            </label>
+            <Input
+              id="signin-password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="h-10"
+            />
+          </div>
           <div aria-live="polite" className="min-h-5 text-sm text-negative">
             {login.isError && login.error.message}
           </div>
         </div>
-        <Button type="submit" className="h-10 w-full" disabled={!password || login.isPending}>
+        <Button type="submit" className="h-10 w-full" disabled={!email || !password || login.isPending}>
           {login.isPending && <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />}
           Sign in
         </Button>

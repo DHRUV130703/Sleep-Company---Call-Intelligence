@@ -28,7 +28,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(auth.PasswordGate)  # no-op unless APP_PASSWORD is set
+app.add_middleware(auth.SignInGate)  # no-op unless APP_USERS is set
 install_error_handlers(app)
 
 for router in (

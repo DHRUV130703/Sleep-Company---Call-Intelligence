@@ -48,14 +48,16 @@ claude auth login
 
 ## Production (Vercel)
 
-Live at **https://limezip.vercel.app**, behind a team password.
+Live at **https://limezip.vercel.app**, behind email + password sign-in.
 
 - **What runs where:** the website and the API run on Vercel (`vercel.json`, `api/index.py`, region Mumbai `bom1`).
   The **worker does not** — Vercel can't keep a process running — so calls are processed by `make worker`
   (or `make dev`) on a machine that stays on. Today that's this Mac; move it to an always-on server
   (e.g. Railway / Render) without code changes when needed. All of them share the cloud database.
-- **Team password:** `APP_PASSCODE` in Vercel → Settings → Environment Variables (a copy is in the
-  git-ignored `.env` as a comment). Changing it, or `APP_SECRET`, signs everyone out. Locally it stays off.
+- **Sign-in:** each person signs in with their work email and password. Accounts are the `APP_USERS`
+  setting in Vercel → Settings → Environment Variables, as JSON `{"name@thesleepcompany.in": "password"}`.
+  Add, remove or change people there and redeploy; that ends the sessions of anyone removed or changed.
+  Changing `APP_SECRET` signs everyone out. Locally (no `APP_USERS`) there is no sign-in.
 - **Deploy:** `vercel deploy --prod` from the project folder. After changing backend dependencies run
   `make requirements` first (Vercel installs `requirements.txt`, without the large local-Whisper extra).
 - **Limits on Vercel:** each request may run up to 5 minutes and send up to 4.5 MB (uploads go in 4 MB
@@ -147,7 +149,7 @@ Choices made during the build where the PRD left room. Each one is easy to revis
 - **One lead per phone number**; several recordings of the same number are stacked under that lead.
 - **Tables use server-side paging** (25–50 rows) instead of virtualisation — simpler, and fast enough.
 - **Not built yet:** Docker compose, labelled eval set (`make eval`), PDF export, app passcode, stereo channel-based speaker split.
-- **Deployment:** Vercel for the website + API, the worker on an always-on machine (see "Production"). Sign-in uses the PRD's optional `APP_PASSCODE` (one shared team password) with an HMAC-signed, HTTP-only cookie built from the standard library — no new dependency. Public report links stay reachable without signing in (they carry an unguessable token). Upload chunks shrank from 8 MB to 4 MB for Vercel's 4.5 MB request limit. Local Whisper libraries moved to an optional `local-whisper` extra so the cloud bundle stays small.
+- **Deployment:** Vercel for the website + API, the worker on an always-on machine (see "Production"). Sign-in is per person (email + password from the `APP_USERS` setting, replacing the PRD's single optional passcode at the owner's request) with an HMAC-signed, HTTP-only cookie built from the standard library — no new dependency, no accounts table. Public report links stay reachable without signing in (they carry an unguessable token). Upload chunks shrank from 8 MB to 4 MB for Vercel's 4.5 MB request limit. Local Whisper libraries moved to an optional `local-whisper` extra so the cloud bundle stays small.
 - **Cloud database, no local disk:** the database is CockroachDB (Postgres-compatible, `DATABASE_URL`). Files are stored in the same database as 1 MB parts instead of a separate object store, at the user's request ("move all data to the db") — one service, one bill, nothing on the local disk. Trade-off: a few MB/s per file, fine for call recordings (~0.25 MB/min). New dependencies, needed to talk to CockroachDB: `sqlalchemy-cockroachdb` (its dialect), `psycopg[binary]` (driver), `certifi` (CA certificates to verify the server's TLS). Connections use READ COMMITTED isolation (the API and the worker write at the same time without retry errors) and sequential ids (CockroachDB's default random 64-bit ids are too large for JavaScript). Uploaded 8 MB chunks are joined by re-labelling their parts in SQL, without copying bytes. Worker heartbeat moved to the `worker_heartbeats` table; the single-worker lock file lives in the system temp folder.
 - **Bot improvement plan (AI vs Human):** the verdict, ranked improvement parameters, root causes, missed objections and call-by-call RCA are computed in code (`pipeline/bot_improvement.py`, `pipeline/bot_rca.py`), so they are complete even when the AI-written summary hits a rate limit. Priority = gap to the human average OR how often the bot is weak (score 1–2), thresholds in `config/bot_playbook.yaml`. The verdict is "behind" if quality is > 0.3 below humans **or** the bot ends ≥ 10 points fewer calls with a concrete next step. Each weak moment carries a "better" line written during the per-call analysis (prompt v3); calls reviewed with an older prompt can be refreshed with **Update bot reviews** on the page. The AI summary prompt is capped (~5,000 characters of call digests, worst bot calls and best human calls first) to fit Groq's free tier.
 - **AI vs Human page layout:** one summary card (verdict, scores, key points, and a one-line "based on" note that replaced the Records section), then three tabs — *What to fix* (default), *Calls*, *Side by side* — instead of 12 stacked sections and an "On this page" list. The open tab is kept in the URL (`?view=`). Downloads only (no share-link UI); the server still keeps each downloaded file in `reports`.
