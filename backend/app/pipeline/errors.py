@@ -21,3 +21,13 @@ class StageError(Exception):
     def message(self) -> str:
         base = MESSAGES[self.code]
         return f"{base} ({self.detail})" if self.detail and self.detail not in base else base
+
+
+class StageWait(Exception):
+    """Not an error: the stage is waiting on someone else (e.g. AssemblyAI is still transcribing).
+    The runner puts the job back in the queue to run again after `seconds`, without counting an attempt."""
+
+    def __init__(self, seconds: float, message: str):
+        self.seconds = seconds
+        self.message = message
+        super().__init__(message)

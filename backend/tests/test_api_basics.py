@@ -11,7 +11,6 @@ def test_health_reports_every_check(session):
         "database",
         "worker",
         "ffmpeg",
-        "ffprobe",
         "transcriber",
         "analyzer",
         "config",

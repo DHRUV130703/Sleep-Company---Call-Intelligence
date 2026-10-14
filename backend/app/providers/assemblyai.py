@@ -3,7 +3,8 @@
 Why: Universal-3.5 Pro handles Hindi↔English switching inside a sentence natively and labels speakers
 (A, B) itself — exactly what Hinglish sales calls need. Free tier: ~185 hours of recorded audio.
 
-Flow (REST, https://api.assemblyai.com, header `authorization: <key>`):
+Flow (REST, https://api.assemblyai.com, header `authorization: <key>`) — split into start() (steps 1–2) and
+check() (one look at step 3), so the pipeline never holds a request open while AssemblyAI works:
     1. POST /v2/upload            (raw audio bytes)          → {"upload_url"}
     2. POST /v2/transcript        {audio_url, speech_models, …} → {"id", "status"}
     3. GET  /v2/transcript/{id}   until status is "completed" or "error"
@@ -51,17 +52,40 @@ class AssemblyAITranscriber:
         self.model = models[0] if models else ""
         self.limiter = RateLimiter(rpm)
 
-    async def transcribe(self, audio: Path, *, script: str, context: str = "") -> RawTranscript:
-        async with httpx.AsyncClient(
+    def _client(self) -> httpx.AsyncClient:
+        return httpx.AsyncClient(
             base_url=BASE,
             headers={"authorization": self.api_key},
             timeout=httpx.Timeout(300, connect=20),
             transport=self.transport,
-        ) as client:
-            upload_url = await with_retries(lambda: self._upload(client, audio), what="assemblyai:upload")
-            job_id = await with_retries(lambda: self._submit(client, upload_url), what="assemblyai:submit")
-            data = await self._wait(client, job_id)
+        )
 
+    async def transcribe(self, audio: Path, *, script: str, context: str = "") -> RawTranscript:
+        """Send and wait in one go (used by the background worker for other flows and by tests)."""
+        job_id = await self.start(audio)
+        async with self._client() as client:
+            data = await self._wait(client, job_id)
+        return self._to_raw(data, job_id)
+
+    async def start(self, audio: Path) -> str:
+        """Step 1: upload the recording and ask AssemblyAI to transcribe it. Returns their job id."""
+        async with self._client() as client:
+            upload_url = await with_retries(lambda: self._upload(client, audio), what="assemblyai:upload")
+            return await with_retries(lambda: self._submit(client, upload_url), what="assemblyai:submit")
+
+    async def check(self, job_id: str) -> RawTranscript | None:
+        """Step 2: one look at the job. None while AssemblyAI is still working; ask again a few seconds later.
+        Splitting the work like this keeps every request short (Vercel stops requests after 5 minutes)."""
+        async with self._client() as client:
+            try:
+                res = await client.get(f"/v2/transcript/{job_id}")
+            except httpx.HTTPError as exc:
+                raise ProviderError(f"network error: {exc}", retryable=True) from exc
+            _raise_for(res)
+            data = _finished(res.json())
+        return None if data is None else self._to_raw(data, job_id)
+
+    def _to_raw(self, data: dict[str, Any], job_id: str) -> RawTranscript:
         utterances = data.get("utterances") or []
         if not utterances and data.get("text"):  # no speaker turns returned → one block
             utterances = [
@@ -133,19 +157,26 @@ class AssemblyAITranscriber:
                 await asyncio.sleep(POLL_EVERY_S)  # a blip while polling: just try again
                 continue
             _raise_for(res)
-            data: dict[str, Any] = res.json()
-            if data.get("status") == "completed":
+            data = _finished(res.json())
+            if data is not None:
                 return data
-            if data.get("status") == "error":
-                msg = str(data.get("error") or "unknown error")
-                low = msg.lower()
-                if "balance" in low or "credit" in low or "payment" in low:
-                    raise ProviderError(f"AssemblyAI: {msg}", no_credits=True)
-                if "no spoken audio" in low or "no speech" in low:
-                    return {"utterances": []}  # the pipeline marks the call as silent
-                raise ProviderError(f"AssemblyAI couldn't transcribe this call: {msg}")
             await asyncio.sleep(POLL_EVERY_S)
         raise ProviderError("AssemblyAI took too long", retryable=True)
+
+
+def _finished(data: dict[str, Any]) -> dict[str, Any] | None:
+    """The finished job's data, None while it is still queued/processing; raises if AssemblyAI failed."""
+    if data.get("status") == "completed":
+        return data
+    if data.get("status") == "error":
+        msg = str(data.get("error") or "unknown error")
+        low = msg.lower()
+        if "balance" in low or "credit" in low or "payment" in low:
+            raise ProviderError(f"AssemblyAI: {msg}", no_credits=True)
+        if "no spoken audio" in low or "no speech" in low:
+            return {"utterances": []}  # the pipeline marks the call as silent
+        raise ProviderError(f"AssemblyAI couldn't transcribe this call: {msg}")
+    return None
 
 
 def _raise_for(res: httpx.Response) -> None:

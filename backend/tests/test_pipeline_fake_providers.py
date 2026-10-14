@@ -4,26 +4,14 @@ import io
 import subprocess
 import zipfile
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app import config, providers
 from app.db import get_engine
 from app.main import app
 from app.models import CallStage
 from app.pipeline.stages import process_job
 from app.worker import claim_job
-
-
-@pytest.fixture
-def fake_ai(monkeypatch):
-    monkeypatch.setenv("TRANSCRIBER", "fake")
-    monkeypatch.setenv("ANALYZER", "fake")
-    config.get_settings.cache_clear()
-    providers.reset_providers()
-    yield
-    providers.reset_providers()
 
 
 def _tone(path, seconds: float) -> bytes:

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Monitor, Moon, PanelLeft, Sun, TriangleAlert } from 'lucide-react'
 import { Link } from 'react-router'
 import { SignedInUser } from '@/components/auth/SignedInUser'
+import { ProcessingDriver } from './ProcessingDriver'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { api } from '@/lib/api'
@@ -25,6 +26,7 @@ export function TopBar({ title, onToggleSidebar }: Props) {
       <h1 className="truncate text-[15px] font-medium">{title}</h1>
 
       <div className="ml-auto flex items-center gap-2">
+        <ProcessingDriver />
         <HealthAlert />
         <SignedInUser />
         <Tooltip>

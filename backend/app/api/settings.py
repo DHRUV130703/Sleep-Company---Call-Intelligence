@@ -1,7 +1,6 @@
 """Health, overall stats and settings endpoints."""
 
 import json
-import os
 import shutil
 import subprocess
 import time
@@ -17,6 +16,7 @@ from app.config import Settings, get_business, get_settings, reload_business
 from app.db import get_engine, get_session, utcnow
 from app.errors import AppError, ErrorCode
 from app.models import Call, CallStatus
+from app.pipeline import audio
 from app.schemas import HealthCheck, HealthResponse, ProviderInfo, SettingsResponse, StatsResponse
 from app.worker import last_heartbeat
 
@@ -51,21 +51,18 @@ def _check_database() -> HealthCheck:
         return HealthCheck(name="database", label="Database", state="fail", detail=str(exc)[:200])
 
 
-def _check_binary(name: str) -> HealthCheck:
-    path = shutil.which(name)
-    if not path:
-        return HealthCheck(
-            name=name,
-            label=name,
-            state="fail",
-            detail=f"{name} not found. Install it (macOS: brew install ffmpeg)",
-        )
+def _check_ffmpeg() -> HealthCheck:
+    """ffmpeg prepares the audio: the installed one, or the copy bundled with imageio-ffmpeg (Vercel)."""
+    try:
+        path = audio.ffmpeg_path()
+    except audio.AudioError as exc:
+        return HealthCheck(name="ffmpeg", label="ffmpeg", state="fail", detail=str(exc))
     try:
         first_line = subprocess.run([path, "-version"], capture_output=True, text=True, timeout=5).stdout
         version = first_line.splitlines()[0].split(" Copyright")[0] if first_line else path
     except Exception:
         version = path
-    return HealthCheck(name=name, label=name, state="ok", detail=version)
+    return HealthCheck(name="ffmpeg", label="ffmpeg", state="ok", detail=version)
 
 
 def _check_worker() -> HealthCheck:
@@ -73,6 +70,12 @@ def _check_worker() -> HealthCheck:
         beat = last_heartbeat()
     except Exception as exc:
         return HealthCheck(name="worker", label="Worker", state="fail", detail=str(exc)[:200])
+    if get_settings().process_in_requests:
+        # Hosted without a worker: uploads are processed while the app is open in a browser.
+        recent = beat is not None and (utcnow() - beat).total_seconds() <= WORKER_ALIVE_WITHIN_S
+        detail = "Processing runs while the app is open in a browser"
+        return HealthCheck(name="worker", label="Processing", state="ok",
+                           detail=detail + (" (a background worker is also running)" if recent else ""))  # fmt: skip
     if beat is None:
         return HealthCheck(
             name="worker",
@@ -232,8 +235,7 @@ def health() -> HealthResponse:
     checks = [
         _check_database(),
         _check_worker(),
-        # On Vercel only the website and API run; ffmpeg is needed on the worker machine, not here.
-        *([] if os.environ.get("VERCEL") else [_check_binary("ffmpeg"), _check_binary("ffprobe")]),
+        _check_ffmpeg(),
         _check_provider("transcriber", s.transcriber, s),
         _check_provider("analyzer", s.analyzer, s),
         _check_config(),

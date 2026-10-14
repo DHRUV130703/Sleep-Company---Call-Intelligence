@@ -5,6 +5,10 @@ import type { ApiErrorBody, HealthResponse, SettingsResponse, StatsResponse } fr
 /** Fired when the server says the session has ended; the sign-in screen (AuthGate) listens for it. */
 export const SIGNED_OUT_EVENT = 'limezip:signed-out'
 
+/** Fired after an action that queues calls for processing, so the page starts processing at once. */
+export const WORK_ADDED_EVENT = 'limezip:work-added'
+const QUEUES_WORK = /^\/(batches($|\/\d+\/retry-failed)|calls\/\d+\/(retry|reanalyze|swap-speakers)|compare\/update-bot-reviews)/
+
 /** Error thrown for any non-2xx response. `message` is safe to show to users. */
 export class ApiError extends Error {
   readonly code: string
@@ -51,6 +55,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
       err?.detail ?? {},
     )
   }
+  if (init?.method === 'POST' && QUEUES_WORK.test(path)) window.dispatchEvent(new Event(WORK_ADDED_EVENT))
   return (await res.json()) as T
 }
 

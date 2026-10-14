@@ -22,6 +22,7 @@ dependencies = [
     "certifi>=2026.7.22",
     "fpdf2>=2.8",
     "uharfbuzz>=0.39",
+    "imageio-ffmpeg>=0.6",
 ]
 
 [project.optional-dependencies]

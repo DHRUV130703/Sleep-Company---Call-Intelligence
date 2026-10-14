@@ -73,6 +73,10 @@ class TranscriberWithFallback:
     def name(self) -> str:
         return self.primary_name
 
+    def build_primary(self) -> Transcriber:
+        """The main provider itself (raises AppError if its API key is missing)."""
+        return _build_transcriber(self.primary_name)
+
     async def transcribe(self, audio: Path, *, script: str, context: str = "") -> RawTranscript:
         if time.monotonic() >= self._primary_blocked_until:
             try:

@@ -11,14 +11,12 @@ temporary local copy that is deleted when the stage ends.
 """
 
 import asyncio
-import json
 import logging
 import tempfile
 import time
 from collections.abc import Awaitable, Callable
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any
 
 from sqlmodel import Session, col, select
 
@@ -41,17 +39,14 @@ from app.models import (
     Job,
     JobStatus,
     Transcript,
-    TranscriptCache,
-    TranscriptScript,
 )
 from app.pipeline import audio
-from app.pipeline.analysis import analyse_transcript, assign_speakers, provider_stage_error
-from app.pipeline.errors import StageError
+from app.pipeline.analysis import analyse_transcript
+from app.pipeline.errors import StageError, StageWait
 from app.pipeline.events import emit
 from app.pipeline.leads import refresh_lead
 from app.pipeline.metrics import compute_metrics
-from app.providers import get_transcriber
-from app.providers.base import ProviderError
+from app.pipeline.stage_transcribe import stage_transcribe
 
 log = logging.getLogger("pipeline")
 
@@ -170,133 +165,6 @@ def _save_local(key: str, dest: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Stage 3: transcribe (+ speaker roles), with cache and chunking
-# ---------------------------------------------------------------------------
-
-
-async def stage_transcribe(call_id: int) -> CallStage | None:
-    settings = get_settings()
-    with Session(get_engine()) as s:
-        call = _load(s, call_id)
-        if s.exec(select(Transcript).where(Transcript.call_id == call_id)).first():
-            return CallStage.analysing
-        emit(s, call, stage=CallStage.transcribing, status=CallStatus.running, message="Transcribing")
-        sha, norm_key, duration = call.audio_sha256, call.audio_path or "", call.duration_s or 0
-        batch = s.get(Batch, call.batch_id)
-        script = batch.transcript_script if batch else TranscriptScript(settings.default_transcript_script)
-
-        # Reuse an earlier transcript of the same audio — but only one made by the transcriber selected now
-        # (switching e.g. from Whisper to AssemblyAI must produce a new transcript).
-        cached = s.get(TranscriptCache, sha) if sha else None
-        src = s.get(Transcript, cached.transcript_id) if cached else None
-        if src and src.script == script and src.provider == get_transcriber().name:
-            s.add(
-                Transcript(
-                    call_id=call_id,
-                    provider=src.provider,
-                    model=src.model,
-                    language=src.language,
-                    script=src.script,
-                    segments=src.segments,
-                    speaker_map=src.speaker_map,
-                )
-            )
-            emit(
-                s,
-                call,
-                stage=CallStage.transcribing,
-                status=CallStatus.running,
-                message="Reused previous transcript",
-                progress=100,
-            )
-            return CallStage.analysing
-
-    transcriber = get_transcriber()
-    # Speech-to-text output is saved before the speaker step, so a retry (e.g. after logging in to
-    # Claude) doesn't redo the slow transcription.
-    raw_key = f"transcripts_raw/{sha or call_id}-{transcriber.name}.json"
-    if storage.exists(raw_key):
-        raw_segments = json.loads(storage.read_bytes(raw_key))
-    else:
-        if not storage.exists(norm_key):
-            raise StageError(ErrorCode.NOTHING_TO_PROCESS, detail="Recording file is missing")
-        try:
-            with storage.local_copy(norm_key) as norm:
-                raw_segments = await _transcribe_in_chunks(
-                    norm, duration, str(script), settings.chunk_minutes * 60, call_id
-                )
-        except ProviderError as exc:
-            raise provider_stage_error(exc) from exc
-        storage.put_bytes(raw_key, json.dumps(raw_segments, ensure_ascii=False).encode(), "application/json")
-    if not raw_segments:
-        raise StageError(ErrorCode.SILENT, skip=True)
-
-    labelled = await assign_speakers(raw_segments, str(script))
-    segments = [{**seg, "i": i} for i, seg in enumerate(labelled)]
-    roles = {seg["speaker"]: seg["role"] for seg in segments}
-    used = transcriber.last_used
-    with Session(get_engine()) as s:
-        t = Transcript(
-            call_id=call_id,
-            provider=used.name if used else "?",
-            model=used.model if used else "",
-            script=script,
-            segments=segments,
-            speaker_map=roles,
-        )
-        s.add(t)
-        s.commit()
-        s.refresh(t)
-        if sha:
-            cache = s.get(TranscriptCache, sha) or TranscriptCache(audio_sha256=sha, transcript_id=t.id or 0)
-            cache.transcript_id = t.id or 0
-            s.add(cache)
-            s.commit()
-    return CallStage.analysing
-
-
-async def _transcribe_in_chunks(
-    norm: Path, duration: float, script: str, chunk_s: int, call_id: int
-) -> list[dict[str, Any]]:
-    """Short calls go in one request. Long calls are cut into chunk_s pieces (+5 s overlap) and stitched."""
-    transcriber = get_transcriber()
-    if duration <= chunk_s + CHUNK_OVERLAP_S:
-        result = await transcriber.transcribe(norm, script=script)
-        return [seg.model_dump() for seg in result.segments if seg.text.strip()]
-
-    out: list[dict[str, Any]] = []
-    n_chunks = int(duration // chunk_s) + (1 if duration % chunk_s else 0)
-    with tempfile.TemporaryDirectory() as tmp:
-        for i in range(n_chunks):
-            start = i * chunk_s
-            piece = Path(tmp) / f"chunk{i}.mp3"
-            await audio.cut(norm, piece, start, chunk_s + CHUNK_OVERLAP_S)
-            context = "\n".join(f"{x['speaker']}: {x['text']}" for x in out[-3:])
-            result = await transcriber.transcribe(piece, script=script, context=context)
-            for seg in result.segments:
-                # Keep a segment only if it starts inside this chunk's own window (the overlap belongs to the next).
-                if seg.text.strip() and (seg.start < chunk_s or i == n_chunks - 1):
-                    out.append(
-                        {
-                            "speaker": seg.speaker,
-                            "start": round(seg.start + start, 2),
-                            "end": round(seg.end + start, 2),
-                            "text": seg.text.strip(),
-                        }
-                    )
-            with Session(get_engine()) as s:
-                emit(
-                    s,
-                    _load(s, call_id),
-                    stage=CallStage.transcribing,
-                    status=CallStatus.running,
-                    message=f"Transcribing part {i + 1} of {n_chunks}",
-                    progress=int(100 * (i + 1) / n_chunks),
-                )
-    return out
-
-
-# ---------------------------------------------------------------------------
 # Stage 4: analyse (metrics + AI analysis + lead roll-up)
 # ---------------------------------------------------------------------------
 
@@ -389,8 +257,11 @@ STAGE_HANDLERS: dict[CallStage, StageHandler] = {
 # ---------------------------------------------------------------------------
 
 
-async def process_job(job: Job) -> None:
-    """Run one claimed job. Never raises: every outcome is written to the database."""
+async def process_job(job: Job, time_limit_s: float | None = None) -> None:
+    """Run one claimed job. Never raises: every outcome is written to the database.
+
+    `time_limit_s` (used when processing inside a web request on Vercel) stops a step that runs too long,
+    e.g. while the AI service keeps us waiting; the job is retried later instead of being cut off."""
     assert job.id is not None
     started = time.monotonic()
     with Session(get_engine()) as s:
@@ -401,7 +272,18 @@ async def process_job(job: Job) -> None:
             return
 
     try:
-        next_stage = await STAGE_HANDLERS[job.stage](job.call_id)
+        next_stage = await asyncio.wait_for(STAGE_HANDLERS[job.stage](job.call_id), timeout=time_limit_s)
+    except StageWait as wait:
+        _wait_and_requeue(job, wait)
+        return
+    except TimeoutError:
+        await _handle_stage_error(
+            job,
+            StageError(
+                ErrorCode.PROVIDER_RATE_LIMIT, detail=f"step ran over {time_limit_s:.0f} s", retryable=True
+            ),
+        )
+        return
     except StageError as exc:
         await _handle_stage_error(job, exc)
         return
@@ -439,6 +321,20 @@ async def process_job(job: Job) -> None:
             "duration_ms": int((time.monotonic() - started) * 1000),
         },
     )
+
+
+def _wait_and_requeue(job: Job, wait: StageWait) -> None:
+    """The step is waiting on another service: queue the same job again soon. It doesn't count as an attempt."""
+    assert job.id is not None
+    with Session(get_engine()) as s:
+        j = s.get(Job, job.id)
+        if j is None:
+            return
+        j.status, j.locked_at = JobStatus.queued, None
+        j.attempts = max(0, j.attempts - 1)
+        j.run_after = utcnow() + timedelta(seconds=wait.seconds)
+        s.add(j)
+        emit(s, _load(s, job.call_id), stage=job.stage, status=CallStatus.running, message=wait.message)
 
 
 async def _handle_stage_error(job: Job, exc: StageError) -> None:

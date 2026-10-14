@@ -34,3 +34,16 @@ def session(isolated_data_dir):
     SQLModel.metadata.create_all(engine)
     with Session(engine) as s:
         yield s
+
+
+@pytest.fixture
+def fake_ai(monkeypatch):
+    """Fake transcriber + fake analyser (shared by the end-to-end tests)."""
+    from app import providers
+
+    monkeypatch.setenv("TRANSCRIBER", "fake")
+    monkeypatch.setenv("ANALYZER", "fake")
+    config.get_settings.cache_clear()
+    providers.reset_providers()
+    yield
+    providers.reset_providers()

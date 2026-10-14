@@ -88,6 +88,9 @@ class Settings(BaseSettings):
     # Sign-in accounts as JSON {"email": "password", …} (empty = no login, for local use), and the secret
     # that signs the session cookie. See app/auth.py.
     app_users: str = ""
+    # Process uploads inside web requests while the app is open (Vercel has no background worker).
+    # Off locally, where `make worker` does it. See pipeline/tick.py.
+    process_in_requests: bool = False
     app_secret: str = ""
 
     @field_validator("data_dir")
