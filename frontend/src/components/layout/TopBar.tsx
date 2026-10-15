@@ -28,7 +28,6 @@ export function TopBar({ title, onToggleSidebar }: Props) {
       <div className="ml-auto flex items-center gap-2">
         <ProcessingDriver />
         <HealthAlert />
-        <SignedInUser />
         <Tooltip>
           <TooltipTrigger asChild>
             <Button variant="outline" size="icon" onClick={cycle} aria-label={`Theme: ${pref}. Click to change.`}>
@@ -37,6 +36,7 @@ export function TopBar({ title, onToggleSidebar }: Props) {
           </TooltipTrigger>
           <TooltipContent>Theme: {pref}</TooltipContent>
         </Tooltip>
+        <SignedInUser />
       </div>
     </header>
   )
