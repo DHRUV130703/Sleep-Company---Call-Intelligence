@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     claude_concurrency: int = 2  # Claude requests running at the same time
     openai_transcribe_model: str = "gpt-4o-transcribe-diarize"  # labels speakers; whisper-1 does not
     gemini_transcribe_model: str = "gemini-2.5-flash"
+    # Model used when Gemini is the backup analyser (ANALYZER_FALLBACK=gemini); GEMINI_FALLBACK_MODELS are
+    # tried after it when it is busy or out of its free daily quota.
+    gemini_analysis_model: str = "gemini-2.5-flash"
     analysis_model: str = (
         "qwen3:8b"  # model for the analyzer (Ollama: qwen3:8b; Claude: sonnet; Gemini: gemini-…)
     )

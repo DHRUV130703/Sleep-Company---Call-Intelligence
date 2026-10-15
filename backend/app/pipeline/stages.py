@@ -47,6 +47,7 @@ from app.pipeline.events import emit
 from app.pipeline.leads import refresh_lead
 from app.pipeline.metrics import compute_metrics
 from app.pipeline.stage_transcribe import stage_transcribe
+from app.providers import answered_by
 
 log = logging.getLogger("pipeline")
 
@@ -198,9 +199,11 @@ async def stage_analyse(call_id: int) -> CallStage | None:
     if metrics["customer_turns"] == 0 or metrics["agent_turns"] == 0:
         raise StageError(ErrorCode.NOT_CONNECTED, skip=True)
 
+    answered_by.set(None)
     result, version = await analyse_transcript(
         segments, agent_type=agent_type, campaign=campaign, call_datetime=call_dt, duration_s=duration
     )
+    used = answered_by.get()  # the backup analyser may have written this review
 
     settings = get_settings()
     with Session(get_engine()) as s:
@@ -210,8 +213,8 @@ async def stage_analyse(call_id: int) -> CallStage | None:
         s.add(
             Analysis(
                 call_id=call_id,
-                provider=settings.analyzer,
-                model=settings.analysis_model,
+                provider=used[0] if used else settings.analyzer,
+                model=used[1] if used else settings.analysis_model,
                 prompt_version=version,
                 result=result,
                 quality_pct=result["quality_pct"],

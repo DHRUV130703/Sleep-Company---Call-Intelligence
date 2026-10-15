@@ -8,6 +8,7 @@ skipped for 10 minutes so every call doesn't waste a request.
 import logging
 import tempfile
 import time
+from contextvars import ContextVar
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -145,6 +146,11 @@ def _build_llm(name: str) -> LLM:
     return _gemini_client()
 
 
+# Which service/model actually answered the latest request in this task (the backup may have).
+# Saved with each call review so mixed batches stay traceable. Per task, so parallel calls don't mix up.
+answered_by: ContextVar[tuple[str, str] | None] = ContextVar("answered_by", default=None)
+
+
 class LLMWithFallback:
     """Use the main analyser; when it is out of quota (e.g. Groq's free daily limit) or has no key,
     switch to the backup (e.g. Hugging Face) and try the main one again after a while."""
@@ -160,9 +166,11 @@ class LLMWithFallback:
     ) -> dict[str, Any]:
         if time.monotonic() >= self._primary_blocked_until:
             try:
-                return await _build_llm(self.primary_name).json(
+                result = await _build_llm(self.primary_name).json(
                     prompt=prompt, schema=schema, model=model, audio=audio
                 )
+                answered_by.set((self.primary_name, model))
+                return result
             except (ProviderError, AppError) as exc:
                 if isinstance(exc, ProviderError) and not exc.no_credits:
                     raise  # busy / bad answer: the normal retry handles it
@@ -176,12 +184,22 @@ class LLMWithFallback:
                     },
                 )
         try:
-            return await _build_llm(self.fallback_name).json(
-                prompt=prompt, schema=schema, model=model, audio=audio
-            )
+            backup = _build_llm(self.fallback_name)
+            backup_model = _backup_model(self.fallback_name, model)
+            result = await backup.json(prompt=prompt, schema=schema, model=backup_model, audio=audio)
+            shown_model = get_settings().hf_model if self.fallback_name == "huggingface" else backup_model
+            answered_by.set((self.fallback_name, shown_model))
+            return result
         except AppError as exc:  # e.g. HF_TOKEN missing → a clear, non-retried error
             key = exc.detail.get("key", "the API key")
             raise ProviderError(f"{key} is empty. Add it, then click Retry.", no_credits=True) from exc
+
+
+def _backup_model(name: str, main_model: str) -> str:
+    """The main analyser's model name means nothing to another service: each backup uses its own."""
+    if name == "gemini":
+        return get_settings().gemini_analysis_model
+    return main_model  # Hugging Face ignores it and uses HF_MODEL
 
 
 @lru_cache

@@ -79,3 +79,29 @@ async def test_backup_needs_its_token(monkeypatch):
 
 def test_hf_module_points_at_the_router():
     assert huggingface.URL == "https://router.huggingface.co/v1/chat/completions"
+
+
+async def test_gemini_backup_is_asked_for_a_gemini_model_not_groqs(monkeypatch):
+    from app.errors import AppError, ErrorCode
+
+    asked = {}
+
+    class FakeGemini:
+        name = "gemini"
+
+        async def json(self, *, prompt, schema, model, audio=None):
+            asked["model"] = model
+            return {"ok": True}
+
+    def build(name: str):
+        if name == "groq":
+            raise AppError(ErrorCode.PROVIDER_NOT_CONFIGURED, detail={"key": "GROQ_API_KEY"})
+        return FakeGemini()
+
+    monkeypatch.setattr(providers, "_build_llm", build)
+    monkeypatch.setenv("GEMINI_ANALYSIS_MODEL", "gemini-2.5-flash")
+    config.get_settings.cache_clear()
+    llm = LLMWithFallback("groq", "gemini")
+    assert await llm.json(prompt="p", schema=SCHEMA, model="openai/gpt-oss-120b") == {"ok": True}
+    assert asked["model"] == "gemini-2.5-flash"
+    assert providers.answered_by.get() == ("gemini", "gemini-2.5-flash")  # saved with the call review
