@@ -100,6 +100,7 @@ def _provider_key_present(provider: str, s: Settings) -> bool:
     return {
         "assemblyai": bool(s.assemblyai_api_key),
         "groq": bool(s.groq_api_key),
+        "huggingface": bool(s.hf_token),
         "openai": bool(s.openai_api_key),
         "gemini": bool(s.gemini_api_key),
         "faster_whisper": True,
@@ -204,6 +205,24 @@ def _check_provider(kind: str, provider: str, s: Settings) -> HealthCheck:
     )
 
 
+def _check_backup_analyzer(s: Settings) -> HealthCheck:
+    name = s.analyzer_fallback
+    if _provider_key_present(name, s):
+        detail = (
+            f"{name} ({s.hf_model}) — takes over when {s.analyzer} is out of quota"
+            if name == "huggingface"
+            else f"{name} — ready"
+        )
+        return HealthCheck(name="analyzer_backup", label="Analysis backup", state="ok", detail=detail)
+    key = "HF_TOKEN" if name == "huggingface" else f"{name.upper()}_API_KEY"
+    return HealthCheck(
+        name="analyzer_backup",
+        label="Analysis backup",
+        state="warn",
+        detail=f"{name} selected but {key} is empty",
+    )
+
+
 def _check_config() -> HealthCheck:
     try:
         b = get_business()
@@ -238,6 +257,7 @@ def health() -> HealthResponse:
         _check_ffmpeg(),
         _check_provider("transcriber", s.transcriber, s),
         _check_provider("analyzer", s.analyzer, s),
+        *([_check_backup_analyzer(s)] if s.analyzer_fallback != "none" else []),
         _check_config(),
         _check_storage(),
     ]

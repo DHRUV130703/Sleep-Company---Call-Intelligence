@@ -10,6 +10,7 @@ import tempfile
 import time
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 from app.config import get_settings
 from app.contracts import RawTranscript
@@ -20,6 +21,7 @@ from app.providers.claude_cli import ClaudeCLI
 from app.providers.fake import FakeLLM, FakeTranscriber
 from app.providers.gemini import GeminiClient, GeminiTranscriber
 from app.providers.groq import GroqClient
+from app.providers.huggingface import HuggingFaceClient
 from app.providers.ollama import OllamaClient
 from app.providers.openai_transcriber import OpenAITranscriber
 
@@ -121,23 +123,73 @@ def get_transcriber() -> TranscriberWithFallback:
     return TranscriberWithFallback(s.transcriber, fallback)
 
 
-@lru_cache
-def get_llm() -> LLM:
+def _build_llm(name: str) -> LLM:
     s = get_settings()
-    if s.analyzer == "fake":
+    if name == "fake":
         return FakeLLM()
-    if s.analyzer == "groq":
+    if name == "groq":
         if not s.groq_api_key:
             raise AppError(ErrorCode.PROVIDER_NOT_CONFIGURED, detail={"key": "GROQ_API_KEY"})
         return GroqClient(s.groq_api_key, s.groq_rpm, s.groq_reasoning_effort)
-    if s.analyzer == "ollama":
+    if name == "huggingface":
+        if not s.hf_token:
+            raise AppError(ErrorCode.PROVIDER_NOT_CONFIGURED, detail={"key": "HF_TOKEN"})
+        return HuggingFaceClient(s.hf_token, s.hf_model, s.hf_rpm, s.groq_reasoning_effort)
+    if name == "ollama":
         return OllamaClient(s.ollama_url, s.ollama_concurrency, s.ollama_context_tokens)
-    if s.analyzer == "claude_cli":
+    if name == "claude_cli":
         # Scratch files only (prompt in, answer out): the system temp folder, not the data folder.
         return ClaudeCLI(
             s.claude_cli_path, s.claude_concurrency, Path(tempfile.gettempdir()) / "limezip-claude-work"
         )
     return _gemini_client()
+
+
+class LLMWithFallback:
+    """Use the main analyser; when it is out of quota (e.g. Groq's free daily limit) or has no key,
+    switch to the backup (e.g. Hugging Face) and try the main one again after a while."""
+
+    def __init__(self, primary: str, fallback: str):
+        self.name = primary
+        self.primary_name = primary
+        self.fallback_name = fallback
+        self._primary_blocked_until = 0.0
+
+    async def json(
+        self, *, prompt: str, schema: dict[str, Any], model: str, audio: Path | None = None
+    ) -> dict[str, Any]:
+        if time.monotonic() >= self._primary_blocked_until:
+            try:
+                return await _build_llm(self.primary_name).json(
+                    prompt=prompt, schema=schema, model=model, audio=audio
+                )
+            except (ProviderError, AppError) as exc:
+                if isinstance(exc, ProviderError) and not exc.no_credits:
+                    raise  # busy / bad answer: the normal retry handles it
+                self._primary_blocked_until = time.monotonic() + SKIP_AFTER_NO_CREDITS_S
+                log.warning(
+                    "main analyser unavailable; using backup",
+                    extra={
+                        "primary": self.primary_name,
+                        "fallback": self.fallback_name,
+                        "reason": str(exc)[:200],
+                    },
+                )
+        try:
+            return await _build_llm(self.fallback_name).json(
+                prompt=prompt, schema=schema, model=model, audio=audio
+            )
+        except AppError as exc:  # e.g. HF_TOKEN missing → a clear, non-retried error
+            key = exc.detail.get("key", "the API key")
+            raise ProviderError(f"{key} is empty. Add it, then click Retry.", no_credits=True) from exc
+
+
+@lru_cache
+def get_llm() -> LLM:
+    s = get_settings()
+    if s.analyzer_fallback != "none" and s.analyzer_fallback != s.analyzer:
+        return LLMWithFallback(s.analyzer, s.analyzer_fallback)
+    return _build_llm(s.analyzer)
 
 
 def reset_providers() -> None:

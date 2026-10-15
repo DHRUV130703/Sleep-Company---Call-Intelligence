@@ -31,7 +31,14 @@ class Settings(BaseSettings):
         "assemblyai"
     )
     transcriber_fallback: Literal["gemini", "openai", "none"] = "none"  # used if the main one is unavailable
-    analyzer: Literal["groq", "ollama", "claude_cli", "gemini", "fake"] = "groq"
+    analyzer: Literal["groq", "huggingface", "ollama", "claude_cli", "gemini", "fake"] = "groq"
+    # Backup analyser, used automatically when the main one is out of quota (e.g. Groq's free daily limit).
+    analyzer_fallback: Literal["none", "groq", "huggingface", "gemini"] = "none"
+    # Hugging Face Inference Providers: token with "Make calls to Inference Providers"; the model id may name
+    # the host or a policy (":cheapest" = cheapest host, so free monthly credit lasts longest).
+    hf_token: str = ""
+    hf_model: str = "openai/gpt-oss-120b:cheapest"
+    hf_rpm: int = 30
     groq_api_key: str = ""
     groq_rpm: int = 30  # requests per minute (raise if your Groq plan allows more)
     groq_reasoning_effort: Literal["none", "low", "medium", "high"] = "low"  # how much the model thinks first
