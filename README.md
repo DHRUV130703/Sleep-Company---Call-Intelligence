@@ -67,6 +67,22 @@ Live at **https://limezip.vercel.app**, behind email + password sign-in.
 - **Limits on Vercel:** each request may run up to 5 minutes and send up to 4.5 MB (uploads go in 4 MB
   pieces); spreadsheets over 4.5 MB can't be uploaded there.
 
+## Another copy of the app (separate data)
+
+Each copy = its own Vercel project + its own database + its own settings, running the same code.
+
+| Copy | Address | Database |
+|---|---|---|
+| Main | https://limezip.vercel.app | `defaultdb` |
+| Staging / second team | https://limezip-staging.vercel.app | `limezip_staging` (same CockroachDB cluster) |
+
+- **Update every copy:** `make deploy-all`. After a database change: `make migrate migrate-staging` first.
+- **Who can sign in** is per copy: `APP_USERS` in that Vercel project's settings.
+- **AI keys** are shared by both copies today, so they share the free daily limits.
+- **Adding a third copy:** `CREATE DATABASE <name>` in the cluster, run `alembic upgrade head` with that
+  `DATABASE_URL`, `vercel project add <name>`, copy the settings (new `DATABASE_URL`, `APP_SECRET`,
+  `PUBLIC_BASE_URL`, `FRONTEND_ORIGIN`, `APP_USERS`), then add a `deploy-<name>` line to the Makefile.
+
 ## How it fits together
 
 ```
