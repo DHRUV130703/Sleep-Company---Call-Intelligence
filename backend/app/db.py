@@ -61,10 +61,23 @@ def engine_url(url: str) -> str:
     return urlunsplit((scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
 
 
-@lru_cache
 def get_engine() -> Engine:
+    """The signed-in account's workspace database (app/workspaces.py). Every query goes through here."""
+    from app.workspaces import current_workspace, database_url  # imported here: workspaces reads settings
+
+    return _engine_for(database_url(current_workspace.get()))
+
+
+def clear_engines() -> None:
+    """Forget open connection pools (after settings change, and in tests)."""
+    _engine_for.cache_clear()
+
+
+@lru_cache
+def _engine_for(database_url: str) -> Engine:
+    """One connection pool per database."""
     settings = get_settings()
-    url = engine_url(settings.db_url)
+    url = engine_url(database_url)
     if url.startswith("sqlite"):
         settings.data_dir.mkdir(parents=True, exist_ok=True)
         engine = create_engine(url, connect_args={"check_same_thread": False})

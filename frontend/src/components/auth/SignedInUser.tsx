@@ -13,11 +13,17 @@ export function SignedInUser() {
     onSettled: () => qc.resetQueries(), // re-checks sign-in (→ sign-in screen) and forgets loaded data
   })
   const email = status.data?.email
+  const workspace = status.data?.workspace
   if (!email) return null
   return (
     <div className="flex items-center gap-1.5">
-      <span className="hidden max-w-56 truncate text-[13px] text-muted-foreground md:inline" title={email}>
+      <span className="hidden max-w-64 truncate text-[13px] text-muted-foreground md:inline" title={email}>
         {email}
+        {workspace && (
+          <span className="ml-2 rounded-full border bg-surface px-2 py-0.5 text-xs" title="Your workspace: you only see its data">
+            {workspace === 'main' ? 'Main workspace' : `${workspace[0].toUpperCase()}${workspace.slice(1)}'s workspace`}
+          </span>
+        )}
       </span>
       <Tooltip>
         <TooltipTrigger asChild>

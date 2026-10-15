@@ -95,9 +95,12 @@ class Settings(BaseSettings):
     # Base of the public report links stored with each saved report. Empty = frontend_origin (works on this
     # computer only); set it to the app's public address once it is deployed.
     public_base_url: str = ""
-    # Sign-in accounts as JSON {"email": "password", …} (empty = no login, for local use), and the secret
+    # Sign-in accounts as JSON {"email": "password"} or {"email": {"password": …, "workspace": …}}
+    # (empty = no login, for local use; see app/workspaces.py), and the secret
     # that signs the session cookie. See app/auth.py.
     app_users: str = ""
+    # Extra workspaces, each with its own database: JSON {"name": "postgresql://…"}. "main" = DATABASE_URL.
+    workspace_databases: str = ""
     # Process uploads inside web requests while the app is open (Vercel has no background worker).
     # Off locally, where `make worker` does it. See pipeline/tick.py.
     process_in_requests: bool = False

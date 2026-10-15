@@ -5,13 +5,13 @@
 #   make lint       code checks (ruff, mypy, oxlint, tsc)
 #   make move-to-cloud   one time: copy local data/ into the cloud database in DATABASE_URL
 #   make export-sqlite   report data → exports/limezip-reports-<date>.db (open with sqlite3)
-#   make deploy-all      deploy the latest code to every copy (limezip + limezip-staging)
+#   make deploy          deploy the latest code to Vercel (one app; every workspace)
 
 SHELL := /bin/bash
 BACKEND := backend
 VENV := $(BACKEND)/.venv/bin
 
-.PHONY: setup migrate migrate-staging migration move-to-cloud export-sqlite requirements deploy deploy-staging deploy-all dev api worker web test lint format
+.PHONY: setup migrate workspace migration move-to-cloud export-sqlite requirements deploy dev api worker web test lint format
 
 setup:
 	@command -v uv >/dev/null || { echo "✗ uv is required: https://docs.astral.sh/uv/  (macOS: brew install uv)"; exit 1; }
@@ -23,27 +23,17 @@ setup:
 	@$(MAKE) --no-print-directory migrate
 	@echo "✓ Setup complete. Run: make dev"
 
+# Every workspace's database (main + WORKSPACE_DATABASES), see backend/app/workspaces.py.
 migrate:
-	cd $(BACKEND) && .venv/bin/alembic upgrade head
+	cd $(BACKEND) && .venv/bin/python -m app.workspaces migrate
 
-# Vercel: this folder is linked to the main project "limezip". Other copies are deployed by their project id
-# (not secret). To add a copy, see README → "Another copy of the app".
-VERCEL_TEAM := team_ldDtJZrLUpnx8BQK4Ot3jqg1
-STAGING_PROJECT := prj_Itg6jhdzoJCfeU3bZjOFeKhFbQiZ
+# A new workspace (own database in the same cluster): make workspace name=teamb
+workspace:
+	@test -n "$(name)" || { echo 'Usage: make workspace name="teamb"'; exit 1; }
+	cd $(BACKEND) && .venv/bin/python -m app.workspaces create $(name)
 
 deploy:
 	vercel deploy --prod --yes
-
-deploy-staging:
-	VERCEL_ORG_ID=$(VERCEL_TEAM) VERCEL_PROJECT_ID=$(STAGING_PROJECT) vercel deploy --prod --yes
-
-# The same code to every copy. After a database change, run `make migrate migrate-staging` first.
-deploy-all: deploy deploy-staging
-
-# Apply database changes to the staging copy's database (STAGING_DATABASE_URL in .env).
-migrate-staging:
-	@test -n "$$(grep -E '^STAGING_DATABASE_URL=.+' .env)" || { echo "Add STAGING_DATABASE_URL to .env"; exit 1; }
-	cd $(BACKEND) && DATABASE_URL="$$(grep -E '^STAGING_DATABASE_URL=' ../.env | cut -d= -f2- | sed 's/[[:space:]]*#.*//')" .venv/bin/alembic upgrade head
 
 # One time, after setting DATABASE_URL in .env: copy the local database and files to the cloud database.
 move-to-cloud: migrate

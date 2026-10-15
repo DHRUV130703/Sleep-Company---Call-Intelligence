@@ -6,6 +6,7 @@ How it works:
   claim one queued job atomically → run the stage handler → mark it done/failed.
 - Idle slots don't query the database: one cheap check every few seconds wakes them when work is queued
   (a cloud database is billed per request), and finishing a stage wakes them for the next one.
+- Every workspace (app/workspaces.py) has its own database and queue; the worker serves them all in turn.
 - Jobs stuck in `running` for > 10 minutes (e.g. the worker was killed) are put back in the queue.
 - Every few seconds the worker writes a heartbeat row (worker_heartbeats); /api/health uses it to
   show "Worker: running".
@@ -24,7 +25,7 @@ from pathlib import Path
 from sqlalchemy import select, update
 from sqlmodel import Session, col
 
-from app import storage
+from app import storage, workspaces
 from app.config import get_settings
 from app.db import get_engine, utcnow
 from app.log import setup_logging
@@ -134,22 +135,25 @@ def last_heartbeat() -> datetime | None:
 
 async def heartbeat_loop(stop: asyncio.Event) -> None:
     while not stop.is_set():
-        try:
-            await asyncio.to_thread(write_heartbeat)
-        except Exception:  # a dropped connection must not stop the worker
-            log.warning("heartbeat failed", exc_info=True)
+        for ws in workspaces.names():  # every workspace shows "worker running"
+            try:
+                with workspaces.in_workspace(ws):
+                    await asyncio.to_thread(write_heartbeat)
+            except Exception:  # a dropped connection must not stop the worker
+                log.warning("heartbeat failed", extra={"workspace": ws}, exc_info=True)
         with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(stop.wait(), timeout=HEARTBEAT_EVERY_S)
 
 
 async def stale_job_loop(stop: asyncio.Event) -> None:
     while not stop.is_set():
-        try:
-            with Session(get_engine()) as s:
-                if n := requeue_stale_jobs(s):
-                    log.warning("re-queued stale jobs", extra={"count": n})
-        except Exception:
-            log.warning("database unreachable; will retry", exc_info=True)
+        for ws in workspaces.names():
+            try:
+                with workspaces.in_workspace(ws), Session(get_engine()) as s:
+                    if n := requeue_stale_jobs(s):
+                        log.warning("re-queued stale jobs", extra={"count": n, "workspace": ws})
+            except Exception:
+                log.warning("database unreachable; will retry", extra={"workspace": ws}, exc_info=True)
         with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(stop.wait(), timeout=60)
 
@@ -157,41 +161,55 @@ async def stale_job_loop(stop: asyncio.Event) -> None:
 async def queue_check_loop(wakeup: Wakeup, stop: asyncio.Event) -> None:
     """One cheap query every few seconds; wakes the slots only when there is queued work."""
     while not stop.is_set():
-        try:
-            with Session(get_engine()) as s:
-                found = await asyncio.to_thread(has_queued_jobs, s)
-            if found:
-                await wakeup.nudge()
-        except Exception:
-            log.warning("database unreachable; will retry", exc_info=True)
+        for ws in workspaces.names():
+            try:
+                with workspaces.in_workspace(ws), Session(get_engine()) as s:
+                    found = await asyncio.to_thread(has_queued_jobs, s)
+                if found:
+                    await wakeup.nudge()
+                    break
+            except Exception:
+                log.warning("database unreachable; will retry", extra={"workspace": ws}, exc_info=True)
         with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(stop.wait(), timeout=QUEUE_CHECK_S)
 
 
 async def slot_loop(stage: CallStage, stop: asyncio.Event, wakeup: Wakeup) -> None:
-    engine = get_engine()
+    """Take the next job for `stage` from any workspace (in turn) and run it inside that workspace."""
     while not stop.is_set():
-        try:
-            with Session(engine) as s:
-                job = await asyncio.to_thread(claim_job, s, stage)
-        except Exception:  # cloud database briefly unreachable: wait and try again, never exit
-            log.warning("database unreachable; retrying", extra={"stage": stage}, exc_info=True)
-            await asyncio.sleep(DB_RETRY_S)
-            continue
-        if job is None:
+        did_work = False
+        for ws in workspaces.names():
+            with workspaces.in_workspace(ws):
+                if await _run_one(stage):
+                    did_work = True
+        if did_work:
+            await wakeup.nudge()  # the call's next stage is queued now: start it straight away
+        else:
             await wakeup.wait(IDLE_WAIT_S)  # no query until there is work (or a minute passes)
-            continue
-        assert job.id is not None
+
+
+async def _run_one(stage: CallStage) -> bool:
+    """Claim and run one job in the current workspace. False if there was none (or the database is down)."""
+    try:
+        with Session(get_engine()) as s:
+            job = await asyncio.to_thread(claim_job, s, stage)
+    except Exception:  # cloud database briefly unreachable: wait and try again, never exit
+        log.warning("database unreachable; retrying", extra={"stage": stage}, exc_info=True)
+        await asyncio.sleep(DB_RETRY_S)
+        return False
+    if job is None:
+        return False
+    assert job.id is not None
+    try:
+        await process_job(job)  # records success, retry, skip or failure itself
+    except Exception as exc:  # safety net: never let one bad job kill the slot
+        log.exception("job crashed", extra={"job_id": job.id, "call_id": job.call_id, "stage": stage})
         try:
-            await process_job(job)  # records success, retry, skip or failure itself
-        except Exception as exc:  # safety net: never let one bad job kill the slot
-            log.exception("job crashed", extra={"job_id": job.id, "call_id": job.call_id, "stage": stage})
-            try:
-                with Session(engine) as s:
-                    finish_job(s, job.id, f"{type(exc).__name__}: {exc}")
-            except Exception:  # the job stays "running"; stale_job_loop re-queues it after 10 minutes
-                log.warning("couldn't record the failed job", exc_info=True)
-        await wakeup.nudge()  # the call's next stage is queued now: start it straight away
+            with Session(get_engine()) as s:
+                finish_job(s, job.id, f"{type(exc).__name__}: {exc}")
+        except Exception:  # the job stays "running"; stale_job_loop re-queues it after 10 minutes
+            log.warning("couldn't record the failed job", exc_info=True)
+    return True
 
 
 async def retention_loop(stop: asyncio.Event) -> None:
@@ -199,12 +217,14 @@ async def retention_loop(stop: asyncio.Event) -> None:
     while not stop.is_set():
         days = get_settings().raw_audio_retention_days
         if days > 0:
-            try:
-                removed = await asyncio.to_thread(purge_raw_audio, days)
-                if removed:
-                    log.info("purged old raw audio", extra={"files": removed})
-            except Exception:
-                log.warning("retention cleanup failed; will retry next hour", exc_info=True)
+            for ws in workspaces.names():
+                try:
+                    with workspaces.in_workspace(ws):
+                        removed = await asyncio.to_thread(purge_raw_audio, days)
+                    if removed:
+                        log.info("purged old raw audio", extra={"files": removed, "workspace": ws})
+                except Exception:
+                    log.warning("retention cleanup failed; will retry next hour", exc_info=True)
         with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(stop.wait(), timeout=3600)
 
@@ -233,11 +253,12 @@ def concurrency_for(stage: CallStage) -> int:
 
 async def run_worker(stop: asyncio.Event) -> None:
     requeued = 0
-    try:
-        with Session(get_engine()) as s:
-            requeued = requeue_stale_jobs(s)
-    except Exception:  # stale_job_loop tries again in a minute
-        log.warning("database unreachable at start; continuing", exc_info=True)
+    for ws in workspaces.names():
+        try:
+            with workspaces.in_workspace(ws), Session(get_engine()) as s:
+                requeued += requeue_stale_jobs(s)
+        except Exception:  # stale_job_loop tries again in a minute
+            log.warning("database unreachable at start; continuing", extra={"workspace": ws}, exc_info=True)
     cfg = get_settings()
     if cfg.transcriber in ("faster_whisper", "mlx_whisper"):
         log.info("loading Whisper model…", extra={"transcriber": cfg.transcriber})

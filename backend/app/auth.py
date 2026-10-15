@@ -2,7 +2,10 @@
 
 Accounts come from the APP_USERS environment variable (set in Vercel, never in code), as JSON:
 
-    APP_USERS={"dhruv.gohil@thesleepcompany.in": "…", "ashish.kumar@thesleepcompany.in": "…"}
+    APP_USERS={"dhruv.gohil@thesleepcompany.in": {"password": "…", "workspace": "main"},
+               "ashish.kumar@thesleepcompany.in": {"password": "…", "workspace": "ashish"}}
+
+Each account only ever sees its workspace's data (app/workspaces.py); a plain "password" value = "main".
 
 Leave APP_USERS empty for local use without a login. APP_SECRET signs the session cookie.
 
@@ -22,13 +25,16 @@ import hmac
 import json
 import logging
 import time
+from typing import NamedTuple
 
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
+from app import workspaces
 from app.config import get_settings
+from app.workspaces import MAIN
 
 log = logging.getLogger("auth")
 
@@ -40,17 +46,32 @@ FAILED_LOGIN_DELAY_S = 1.0  # slows down password guessing
 router = APIRouter(tags=["auth"])
 
 
-def users() -> dict[str, str]:
-    """{email (lower case): password} from APP_USERS. A malformed value means nobody can sign in."""
+class Account(NamedTuple):
+    password: str
+    workspace: str
+
+
+def users() -> dict[str, Account]:
+    """{email (lower case): Account} from APP_USERS. A value is either the password (workspace "main") or
+    {"password": …, "workspace": …}. A malformed setting means nobody can sign in."""
     raw = get_settings().app_users.strip()
     if not raw:
         return {}
     try:
-        data = json.loads(raw)
-        return {str(email).strip().lower(): str(pw) for email, pw in data.items()}
-    except (ValueError, AttributeError):
-        log.error('APP_USERS is not valid JSON like {"name@company.com": "password"}')
-        return {"": ""}  # keeps sign-in required, but no one can match it
+        out = {}
+        for email, value in json.loads(raw).items():
+            if isinstance(value, dict):
+                out[str(email).strip().lower()] = Account(
+                    str(value["password"]), str(value.get("workspace", MAIN))
+                )
+            else:
+                out[str(email).strip().lower()] = Account(str(value), MAIN)
+        return out
+    except (ValueError, AttributeError, KeyError, TypeError):
+        log.error(
+            'APP_USERS is not valid JSON like {"name@company.com": {"password": "…", "workspace": "…"}}'
+        )
+        return {"": Account("", MAIN)}  # keeps sign-in required, but no one can match it
 
 
 def auth_required() -> bool:
@@ -64,7 +85,7 @@ def _sign(email: str, issued: str, password: str) -> str:
 
 def make_token(email: str, now: float | None = None) -> str:
     issued = str(int(now if now is not None else time.time()))
-    return f"{email}|{issued}|{_sign(email, issued, users()[email])}"
+    return f"{email}|{issued}|{_sign(email, issued, users()[email].password)}"
 
 
 def signed_in_email(token: str | None, now: float | None = None) -> str | None:
@@ -73,27 +94,45 @@ def signed_in_email(token: str | None, now: float | None = None) -> str | None:
     if len(parts) != 3 or not parts[1].isdigit():
         return None
     email, issued, sig = parts
-    password = users().get(email)
-    if password is None or not email or not hmac.compare_digest(sig, _sign(email, issued, password)):
+    account = users().get(email)
+    if account is None or not email or not hmac.compare_digest(sig, _sign(email, issued, account.password)):
         return None
     age = (now if now is not None else time.time()) - int(issued)
     return email if 0 <= age <= SESSION_DAYS * 86400 else None
 
 
 class SignInGate(BaseHTTPMiddleware):
+    """Every /api request runs inside one workspace: the signed-in person's (or, for a shared report link,
+    the workspace named in the link). Without sign-in configured (local use) everything is "main"."""
+
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         path = request.url.path
-        if (
-            auth_required()
-            and path.startswith("/api/")
-            and not path.startswith(PUBLIC_PATHS)
-            and not signed_in_email(request.cookies.get(COOKIE))
-        ):
-            return JSONResponse(
-                {"error": {"code": "UNAUTHORIZED", "message": "Please sign in.", "detail": {}}},
-                status_code=401,
-            )
-        return await call_next(request)
+        workspace = MAIN
+        if path.startswith("/api/reports/"):
+            workspace = report_link_workspace(path)
+        elif auth_required() and path.startswith("/api/") and not path.startswith(PUBLIC_PATHS):
+            email = signed_in_email(request.cookies.get(COOKIE))
+            if email is None:
+                return _unauthorized("Please sign in.")
+            workspace = users()[email].workspace
+        if workspace not in workspaces.names():
+            log.error("workspace has no database", extra={"workspace": workspace})
+            return _unauthorized("Your account's workspace isn't set up. Ask your admin.")
+        with workspaces.in_workspace(workspace):
+            return await call_next(request)
+
+
+def report_link_workspace(path: str) -> str:
+    """Shared report links look like /api/reports/<token>/<file>; tokens from other workspaces start
+    with "<workspace>." (tokens never contain a dot otherwise)."""
+    token = path.removeprefix("/api/reports/").split("/", 1)[0]
+    return token.split(".", 1)[0] if "." in token else MAIN
+
+
+def _unauthorized(message: str) -> JSONResponse:
+    return JSONResponse(
+        {"error": {"code": "UNAUTHORIZED", "message": message, "detail": {}}}, status_code=401
+    )
 
 
 class LoginBody(BaseModel):
@@ -104,14 +143,24 @@ class LoginBody(BaseModel):
 @router.get("/auth/status")
 def status(request: Request) -> dict:
     email = signed_in_email(request.cookies.get(COOKIE))
-    return {"required": auth_required(), "authenticated": email is not None, "email": email}
+    workspace = users()[email].workspace if email else None
+    return {
+        "required": auth_required(),
+        "authenticated": email is not None,
+        "email": email,
+        "workspace": workspace,
+    }
 
 
 @router.post("/auth/login")
 async def login(body: LoginBody, request: Request) -> Response:
     email = body.email.strip().lower()
-    password = users().get(email)
-    if not email or password is None or not hmac.compare_digest(body.password.encode(), password.encode()):
+    account = users().get(email)
+    if (
+        not email
+        or account is None
+        or not hmac.compare_digest(body.password.encode(), account.password.encode())
+    ):
         await asyncio.sleep(FAILED_LOGIN_DELAY_S)
         return JSONResponse(
             {"error": {"code": "UNAUTHORIZED", "message": "Wrong email or password.", "detail": {}}},

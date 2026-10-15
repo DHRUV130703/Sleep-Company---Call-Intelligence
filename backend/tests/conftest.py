@@ -11,7 +11,7 @@ def isolated_data_dir(tmp_path, monkeypatch):
     # Never read the developer's real .env (it holds real API keys): tests use code defaults only.
     monkeypatch.setitem(config.Settings.model_config, "env_file", None)
     monkeypatch.setenv("DATA_DIR", str(tmp_path / "data"))
-    for key in ("DATABASE_URL", "GEMINI_API_KEY", "OPENAI_API_KEY"):
+    for key in ("DATABASE_URL", "WORKSPACE_DATABASES", "APP_USERS", "GEMINI_API_KEY", "OPENAI_API_KEY"):
         monkeypatch.setenv(key, "")
     # Tests never call real AI: fake transcriber + fake analyser unless a test opts in.
     monkeypatch.setenv("TRANSCRIBER", "fake")
@@ -20,10 +20,10 @@ def isolated_data_dir(tmp_path, monkeypatch):
 
     providers.reset_providers()
     config.get_settings.cache_clear()
-    db.get_engine.cache_clear()
+    db.clear_engines()
     yield tmp_path / "data"
     config.get_settings.cache_clear()
-    db.get_engine.cache_clear()
+    db.clear_engines()
 
 
 @pytest.fixture

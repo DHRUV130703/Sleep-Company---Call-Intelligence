@@ -23,7 +23,12 @@ def _login(c: TestClient, email: str, password: str) -> int:
 
 def test_no_accounts_means_no_login(session, monkeypatch):
     c = _client(monkeypatch)
-    assert c.get("/api/auth/status").json() == {"required": False, "authenticated": False, "email": None}
+    assert c.get("/api/auth/status").json() == {
+        "required": False,
+        "authenticated": False,
+        "email": None,
+        "workspace": None,
+    }
     assert c.get("/api/leads").status_code == 200
 
 

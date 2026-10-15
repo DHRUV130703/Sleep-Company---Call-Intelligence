@@ -9,6 +9,8 @@ export interface AuthStatus {
   authenticated: boolean
   /** Who is signed in (null when signed out or when sign-in is off). */
   email: string | null
+  /** The workspace whose data they see (null when signed out or when sign-in is off). */
+  workspace: string | null
 }
 
 export const authApi = {

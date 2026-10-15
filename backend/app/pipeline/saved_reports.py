@@ -22,6 +22,7 @@ from app.pipeline.report import build_outline
 from app.pipeline.report_docx import render_docx
 from app.pipeline.report_pdf import render_pdf
 from app.pipeline.report_xlsx import render_xlsx
+from app.workspaces import MAIN, current_workspace
 
 CONTENT_TYPES = {
     "pdf": "application/pdf",
@@ -82,7 +83,11 @@ def save_report(session: Session, scope: dict[str, Any], result: dict[str, Any],
         return existing
 
     data = render(fmt, result, session)
-    token = secrets.token_urlsafe(18)
+    token = secrets.token_urlsafe(18)  # never contains a dot
+    if (ws := current_workspace.get()) != MAIN:
+        token = (
+            f"{ws}.{token}"  # the public link then opens this workspace's file (auth.report_link_workspace)
+        )
     filename = filename_for(result, fmt)
     key = f"reports/{token}/{filename}"
     storage.put_bytes(key, data, CONTENT_TYPES[fmt])
