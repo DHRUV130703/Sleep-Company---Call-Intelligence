@@ -121,7 +121,8 @@ def _call_tables(s: Session) -> dict[str, Rows]:
             for o in r.get("objections", [])
         ]  # fmt: skip
         out["call_next_actions"] += [
-            {**base, "lead_id": c.lead_id, "title": n.get("title"), "say": n.get("say"), "why": n.get("why"),
+            {**base, "lead_id": c.lead_id, "title": n.get("title"),
+             "points": "\n".join(n.get("points") or []) or n.get("why"),
              "due_when": n.get("when"), "due": n.get("due")}
             for n in r.get("next_actions", [])
         ]  # fmt: skip

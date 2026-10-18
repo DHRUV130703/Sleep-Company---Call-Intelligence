@@ -366,8 +366,7 @@ def _action_json(a: Action) -> dict[str, Any]:
         "id": a.id,
         "call_id": a.call_id,
         "title": a.title,
-        "say": a.say,
-        "why": a.why,
+        "points": a.points or ([a.why] if a.why else []),  # older actions have one "why" line
         "due_date": iso_date(a.due_date),
         "done": a.done,
         "source": a.source,

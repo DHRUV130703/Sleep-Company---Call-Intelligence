@@ -154,9 +154,11 @@ class KeyMoment(BaseModel):
 
 
 class NextAction(BaseModel):
-    title: str = ""
-    say: str = Field(default="", description="What to say on the follow-up, in the customer's language")
-    why: str = ""
+    title: str = Field(default="", description="The step in a few words, e.g. 'Send 72x72 price on WhatsApp'")
+    points: list[str] = Field(
+        default_factory=list,
+        description="2-3 short points in English: what exactly to do or cover (product, size, price, offer, concern)",
+    )
     when: str = Field(default="", description='Due, exactly as agreed in the call ("" if none)')
 
 

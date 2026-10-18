@@ -1,6 +1,6 @@
 // "Action insights": what to do with this customer next.
 //   1. What to pitch     — products from config/products.yaml that fit what the customer said (with their words)
-//   2. What to do next?  — concrete steps, each with a "Say:" line and why it helps
+//   2. What to do next?  — concrete steps, each with a few short points
 //   3. Handle these concerns — objections and a better way to answer them
 //   4. Questions still open — what the customer asked that wasn't answered
 
@@ -8,6 +8,7 @@ import { CircleCheck, Lightbulb, MessageCircleQuestion, ShieldAlert } from 'luci
 import type { ReactNode } from 'react'
 import { formatDay, humanize } from '@/lib/format'
 import type { CallAnalysis } from '@/lib/types-calls'
+import { ActionPoints } from '@/components/ActionPoints'
 import { EvidenceQuote } from './EvidenceQuote'
 
 interface Props {
@@ -60,13 +61,7 @@ export function ActionInsightsTab({ analysis, onSeek }: Props) {
                   </span>
                   {a.due && <span className="num text-xs text-muted-foreground">Due {formatDay(a.due)}</span>}
                 </div>
-                {a.say && <SayLine text={a.say} />}
-                {a.why && (
-                  <p className="mt-2 flex gap-2 text-sm text-muted-foreground">
-                    <CircleCheck className="mt-0.5 size-4 shrink-0 text-positive" aria-hidden />
-                    {a.why}
-                  </p>
-                )}
+                <ActionPoints points={a.points} why={a.why} className="mt-2" />
               </li>
             ))}
           </ol>

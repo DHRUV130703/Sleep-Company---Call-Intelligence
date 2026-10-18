@@ -230,8 +230,9 @@ class Action(SQLModel, table=True):
     lead_id: int = Field(foreign_key="leads.id", index=True)
     call_id: int | None = Field(default=None, foreign_key="calls.id")
     title: str
-    say: str = ""
+    say: str = ""  # older AI actions only (a line to read out); new ones use points
     why: str = ""
+    points: list | None = _json()  # what to do or cover, one short point each
     due_date: date | None = None
     done: bool = False
     source: ActionSource = ActionSource.ai

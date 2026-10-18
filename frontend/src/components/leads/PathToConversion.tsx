@@ -1,6 +1,7 @@
 import { CalendarClock, Route } from 'lucide-react'
 import { formatShortDate } from '@/lib/leads-format'
 import type { PathToConversion as Path } from '@/lib/types-leads'
+import { ActionPoints } from '@/components/ActionPoints'
 import { cn } from '@/lib/utils'
 
 /**
@@ -47,13 +48,7 @@ export function PathToConversion({ path, className }: { path: Path | null; class
                     </span>
                     <div className="min-w-0 space-y-1">
                       <p className="font-semibold">{a.title}</p>
-                      {a.say && (
-                        <p className="rounded-md bg-surface-sunken px-2.5 py-1.5">
-                          <span aria-hidden>👉 </span>
-                          <span className="font-semibold">Say:</span> {a.say}
-                        </p>
-                      )}
-                      {a.why && <p className="text-muted-foreground">{a.why}</p>}
+                      <ActionPoints points={a.points} why={a.why} />
                       {(a.due || a.when) && (
                         <p className="inline-flex items-center gap-1 text-xs text-warning">
                           <CalendarClock className="size-3.5" aria-hidden />

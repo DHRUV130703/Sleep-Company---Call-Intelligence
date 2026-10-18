@@ -65,8 +65,7 @@ class FakeLLM:
                 "next_actions": [
                     {
                         "title": "Confirm the visit",
-                        "say": "Namaste, aapka visit confirm karna tha.",
-                        "why": "Visit was agreed",
+                        "points": ["Confirm the store and time", "Visit was agreed on the call"],
                         "when": "tomorrow",
                     }
                 ],
@@ -147,8 +146,7 @@ class FakeLLM:
             "next_actions": [
                 {
                     "title": "Call back with offer details",
-                    "say": "Namaste, offer details share karne the.",
-                    "why": "Price was the main question",
+                    "points": ["Share the current offer price", "Price was the main question"],
                     "when": "tomorrow",
                 }
             ],

@@ -236,8 +236,7 @@ async def stage_analyse(call_id: int) -> CallStage | None:
                         lead_id=call.lead_id,
                         call_id=call_id,
                         title=na["title"],
-                        say=na["say"],
-                        why=na["why"],
+                        points=na["points"],
                         due_date=date.fromisoformat(na["due"]) if na.get("due") else None,
                     )
                 )

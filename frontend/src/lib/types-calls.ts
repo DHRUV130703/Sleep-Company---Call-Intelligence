@@ -104,8 +104,8 @@ export interface KeyMoment {
 
 export interface NextAction {
   title: string
-  say: string
-  why: string
+  points?: string[]
+  why?: string // older analyses: one sentence instead of points
   when: string
   due: string | null
 }

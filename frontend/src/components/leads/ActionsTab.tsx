@@ -6,6 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { leadsApi } from '@/lib/api-leads'
 import type { LeadAction } from '@/lib/types-leads'
+import { ActionPoints } from '@/components/ActionPoints'
 import { cn } from '@/lib/utils'
 
 /** Tasks for this lead: AI-suggested and manual. Tick to mark done, change the due date, add or delete. */
@@ -122,13 +123,7 @@ function TaskList({ title, items, empty, onToggle, onDue, onDelete }: TaskListPr
                     </span>
                   )}
                 </p>
-                {a.say && (
-                  <p>
-                    <span aria-hidden>👉 </span>
-                    <span className="font-semibold">Say:</span> {a.say}
-                  </p>
-                )}
-                {a.why && <p className="text-muted-foreground">{a.why}</p>}
+                <ActionPoints points={a.points} />
               </div>
               <label className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">Due</span>

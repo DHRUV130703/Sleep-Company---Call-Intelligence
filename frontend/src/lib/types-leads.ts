@@ -170,8 +170,8 @@ export interface LeadInsights {
 
 export interface PathAction {
   title: string
-  say: string
-  why: string
+  points?: string[]
+  why?: string // older analyses: one sentence instead of points
   when: string
   due: string | null
 }
@@ -186,8 +186,7 @@ export interface LeadAction {
   id: number
   call_id: number | null
   title: string
-  say: string
-  why: string
+  points: string[]
   due_date: string | null
   done: boolean
   source: string
