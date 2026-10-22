@@ -52,6 +52,14 @@ def test_each_person_signs_in_with_their_own_email_and_password(session, monkeyp
     assert c.get("/api/reports/abc/file.pdf").status_code == 404
 
 
+def test_a_username_works_like_an_email(session, monkeypatch):
+    c = _client(monkeypatch, {**USERS, "Dhruv123": {"password": "pw-three", "workspace": "main"}})
+    assert _login(c, "dhruv123", "pw-one") == 401  # the email account's password doesn't work here
+    assert _login(c, " DHRUV123 ", "pw-three") == 200  # case and spaces don't matter
+    assert c.get("/api/leads").status_code == 200
+    assert c.get("/api/auth/status").json()["email"] == "dhruv123"
+
+
 def test_sessions_expire_and_end_when_access_is_removed(monkeypatch):
     monkeypatch.setenv("APP_USERS", json.dumps(USERS))
     monkeypatch.setenv("APP_SECRET", "s1")

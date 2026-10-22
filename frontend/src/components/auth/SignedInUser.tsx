@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { authApi } from '@/lib/api-auth'
 
-/** "dhruv.gohil@…" → "Dhruv Gohil" (the part before @, split on dots, dashes and underscores). */
+/** "dhruv.gohil@…" → "Dhruv Gohil", "dhruv123" → "Dhruv123" (the part before any @, split on dots, dashes and underscores). */
 function displayName(email: string): string {
   return email
     .split('@')[0]
@@ -63,7 +63,7 @@ export function SignedInUser() {
       <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuLabel className="font-normal">
           <div className="text-sm font-medium">{name}</div>
-          <div className="truncate text-xs text-muted-foreground">{email}</div>
+          {email.includes('@') && <div className="truncate text-xs text-muted-foreground">{email}</div>}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <div className="flex items-start gap-2 px-2 py-1.5 text-sm">

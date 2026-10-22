@@ -1,9 +1,12 @@
-"""Sign-in for the deployed app: each person has an email and a password.
+"""Sign-in for the deployed app: each person has an email (or a username) and a password.
 
 Accounts come from the APP_USERS environment variable (set in Vercel, never in code), as JSON:
 
     APP_USERS={"dhruv.gohil@thesleepcompany.in": {"password": "…", "workspace": "main"},
-               "ashish.kumar@thesleepcompany.in": {"password": "…", "workspace": "ashish"}}
+               "ashish.kumar@thesleepcompany.in": {"password": "…", "workspace": "ashish"},
+               "Dhruv123": {"password": "…", "workspace": "main"}}
+
+A key without "@" is a username; either way it's matched ignoring upper/lower case.
 
 Each account only ever sees its workspace's data (app/workspaces.py); a plain "password" value = "main".
 
@@ -52,7 +55,7 @@ class Account(NamedTuple):
 
 
 def users() -> dict[str, Account]:
-    """{email (lower case): Account} from APP_USERS. A value is either the password (workspace "main") or
+    """{email or username (lower case): Account} from APP_USERS. A value is either the password (workspace "main") or
     {"password": …, "workspace": …}. A malformed setting means nobody can sign in."""
     raw = get_settings().app_users.strip()
     if not raw:
@@ -163,7 +166,13 @@ async def login(body: LoginBody, request: Request) -> Response:
     ):
         await asyncio.sleep(FAILED_LOGIN_DELAY_S)
         return JSONResponse(
-            {"error": {"code": "UNAUTHORIZED", "message": "Wrong email or password.", "detail": {}}},
+            {
+                "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "Wrong email, username or password.",
+                    "detail": {},
+                }
+            },
             status_code=401,
         )
     res = JSONResponse({"ok": True, "email": email})

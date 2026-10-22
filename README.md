@@ -58,8 +58,9 @@ Live at **https://limezip.vercel.app**, behind email + password sign-in.
   this tab open". Close every tab and processing pauses; it resumes when someone opens the app again.
   Turned on by `PROCESS_IN_REQUESTS=true` (set on Vercel). `make worker` still works too, e.g. on an
   always-on server for processing with no tab open; both can run at once without doing anything twice.
-- **Sign-in:** each person signs in with their work email and password. Accounts are the `APP_USERS`
-  setting in Vercel → Settings → Environment Variables, as JSON `{"name@thesleepcompany.in": "password"}`.
+- **Sign-in:** each person signs in with their work email (or a username) and password. Accounts are the `APP_USERS`
+  setting in Vercel → Settings → Environment Variables, as JSON `{"name@thesleepcompany.in": "password"}`;
+  a key without "@" is a username (e.g. `"Dhruv123"`). Emails and usernames ignore upper/lower case.
   Add, remove or change people there and redeploy; that ends the sessions of anyone removed or changed.
   Changing `APP_SECRET` signs everyone out. Locally (no `APP_USERS`) there is no sign-in.
 - **Deploy:** `vercel deploy --prod` from the project folder. After changing backend dependencies run

@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { AudioLines, Eye, EyeOff, Loader2, Lock, Mail, TriangleAlert } from 'lucide-react'
+import { AudioLines, Eye, EyeOff, Loader2, Lock, TriangleAlert, UserRound } from 'lucide-react'
 import { type FormEvent, type ReactNode, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { authApi } from '@/lib/api-auth'
@@ -98,18 +98,19 @@ function SignInForm() {
       <Logo className="lg:hidden" />
       <div className="space-y-1.5">
         <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
-        <p className="text-muted-foreground">Use your Sleep Company work account.</p>
+        <p className="text-muted-foreground">Use your work email or username.</p>
       </div>
 
       <div className="space-y-6">
-        <Field id="signin-email" label="Email address" icon={<Mail className="size-4" aria-hidden />}>
+        <Field id="signin-email" label="Email or username" icon={<UserRound className="size-4" aria-hidden />}>
           <input
             id="signin-email"
-            type="email"
-            inputMode="email"
+            type="text"
             autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
             autoFocus
-            placeholder="Enter your email address"
+            placeholder="Enter your email or username"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className={INPUT}
@@ -156,7 +157,7 @@ function SignInForm() {
         </Button>
       </div>
 
-      <p className="text-center text-sm text-muted-foreground">Need access? Ask your admin to add your email.</p>
+      <p className="text-center text-sm text-muted-foreground">Need access? Ask your admin to add you.</p>
     </form>
   )
 }
