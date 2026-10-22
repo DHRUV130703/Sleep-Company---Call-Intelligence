@@ -18,7 +18,7 @@ Build a local call-intelligence app: upload call recordings (ZIP / Excel of link
 10. **Never log secrets or transcript text at INFO.** Never commit `.env`.
 
 ## Build order (one milestone at a time; stop and summarise after each)
-- **M0** skeleton → **M1** uploader and ingest → **M2** pipeline and SSE progress → **M3** per-call analysis and Call Detail → **M4** Leads list and Lead Details → **M5** AI vs Human → **M6** polish.
+- **M0** skeleton → **M1** uploader and ingest → **M2** pipeline and SSE progress → **M3** per-call analysis and Call Detail → **M4** Leads list and Lead Details → **M5** AI vs Human → **M6** polish → **M7** Knowledge Base and lead-specific pitch (PRD §6.8; planned, not started — ask before building).
 - Each milestone's acceptance criteria are in PRD §11. Don't start the next milestone until the current one's criteria pass and its tests are green.
 - Build with **fake providers first** (`FakeTranscriber`, `FakeAnalyzer` returning fixtures) so the whole flow works with no API keys. Then add the real providers.
 

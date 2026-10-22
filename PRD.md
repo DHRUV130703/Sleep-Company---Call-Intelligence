@@ -312,6 +312,38 @@ Sections, in this order:
 - Read-only preview of `scorecard.yaml` and `intent_rubric.yaml`, with "Reload config".
 - Optional app passcode (P1). If set, every API call needs the session cookie.
 
+### 6.8 Knowledge Base and lead-specific pitch (M7, planned; not built yet)
+**Why:** "What to pitch" today comes from a short hand-written list (`config/products.yaml`: name, category, "pitch when…"), worked out per call. The suggestions are generic. The real catalog, prices and offers live in sheets, PDFs, web pages and company systems.
+
+**Goal:** a separate Knowledge Base module that reads many sources, and a "What to pitch" that is derived from it **for each lead** (everything the customer said across all their calls).
+
+#### 6.8.1 Sources (per workspace)
+| Source | How it's read | Refresh |
+|---|---|---|
+| CSV / Excel file | Upload; existing sheet reader | Re-upload |
+| PDF | Upload; text extracted page by page | Re-upload |
+| Web link | Fetched; main text of the page | Sync now / daily |
+| Google Sheet | Shared link → CSV export of each tab | Sync now / daily |
+| API | URL, method, optional header key (stored like other secrets, never shown); JSON response | Sync now / daily |
+| MCP server | URL + optional key; chosen tool or resources read as text | Sync now / daily |
+| Built-in list | Today's `config/products.yaml`, imported as the first source so pitches keep working | On config reload |
+
+Each source shows its name, type, last sync time, status (synced / failed with a plain-language error from `errors.py`), and the number of cards it produced. Raw source content is stored through `storage.py` like every other file.
+
+#### 6.8.2 Knowledge cards
+- After each sync, the AI reads the source once and extracts **cards**: product or offer name, category, sizes, price (as written in the source), current offers and validity, who it suits, key selling points, and the source and location it came from (row, page, URL).
+- **New and changed cards wait for approval.** A Knowledge page lists them as *Pending / Approved / Hidden*; anyone in the workspace can edit, approve, hide or delete a card. Only approved cards are used for pitches. A re-sync that changes an approved card puts the new version back in Pending (the old one stays live until it's approved).
+- No vector database: the approved card list is small enough to filter in code (category, size, budget words from the lead) and pass to the prompt. Revisit only if a workspace has more than a few hundred approved cards.
+
+#### 6.8.3 Lead-specific "What to pitch"
+- Worked out in the lead roll-up (§7.4) from all of the lead's analysed calls plus the approved cards. It is refreshed when a new call for the lead is analysed, and when approved cards change (marked outdated, re-run on view or with a button).
+- 0–3 pitches, each with: the card it comes from (must be an approved card id), **why it fits** this customer, the customer's own words as evidence (`verify_quote`), and **2–3 short points** on how to pitch it — points, never a script to read out.
+- **Grounding:** any price, size or offer in a pitch must appear in its card; otherwise the pitch is dropped. No card fits → "Nothing to pitch yet", with a link to the Knowledge page.
+- Shown on Lead Details (Insights, next to Path to Conversion). The call's Action insights tab links to the lead's pitches instead of making its own.
+
+#### 6.8.4 New dependencies (need approval when M7 starts)
+`pypdf` (PDF text), `trafilatura` (main text of a web page), `mcp` (official MCP client). Excel/CSV reading and HTTP already exist.
+
 ---
 
 ## 7. Intelligence Specification
@@ -802,6 +834,7 @@ AI and Human always use the same colours and order (AI on the left, Human on the
 | **M4** | Leads | All Conversations with KPIs, deltas, intent cards, filters and a virtualised table. Lead Details with Insights, Path to Conversion, Conversations, Summary, Actions and Notes. |
 | **M5** | AI vs Human | All sections A–H. Every evidence quote verified and clickable. Records strip and sample warning. CSV/JSON export. Cached results. |
 | **M6** | Polish | Dark mode, accessibility pass, README "how to change things" guide, eval script, Docker compose, fake-provider E2E test in CI. |
+| **M7** | Knowledge Base and lead pitch (§6.8) | Sources of every type in §6.8.1 sync and show status. Cards are extracted, and only approved cards are used. Lead Details shows 0–3 pitches, each tied to an approved card, with a verified customer quote and 2–3 points; a price or offer not in the card is dropped. Fake-provider test covers sync → cards → approve → pitch. |
 
 **v1 is accepted when** a real batch of ≥ 50 AI calls and ≥ 50 human calls from the same campaign can be uploaded from an Excel of links and processed without manual intervention (except for genuinely broken links), and a sales manager agrees with the intent bucket on ≥ 80% of 20 sampled leads.
 
